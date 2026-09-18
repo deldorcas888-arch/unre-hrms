@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>UNRE HR | University of Natural Resources and Environment</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css?v=plainbg" />
+  <link rel="icon" href="assets/unre-logo.jpg" type="image/jpeg" />
+</head>
+<body>
+  <div id="auth" class="auth-wrap">
+    <aside class="auth-hero" aria-hidden="true">
+      <div class="auth-hero-copy">
+        <p class="kicker">Vudal campus · East New Britain</p>
+        <h2>Papua New Guinea University of Natural Resources &amp; Environment</h2>
+        <p>Field, forest, and campus — UNRE HR for the people who keep the university running.</p>
+      </div>
+      <p class="photo-credit">Photo: Rolfmueller · CC BY-SA 4.0 · Wikimedia Commons</p>
+    </aside>
+    <div class="auth-panel">
+    <div class="auth-card">
+      <div class="brand-lockup">
+        <img src="assets/unre-logo.jpg" alt="Papua New Guinea University of Natural Resources and Environment" />
+        <div>
+          <h1>UNRE HR</h1>
+          <p>Papua New Guinea · Kerevat campus</p>
+        </div>
+      </div>
+      <div class="portal-tabs" role="tablist">
+        <button type="button" class="on" data-portal="hr" role="tab">HR office</button>
+        <button type="button" data-portal="staff" role="tab">Staff self-service</button>
+      </div>
+      <h2 id="login-title">HR sign in</h2>
+      <p class="lede" id="login-lede">Approve leave, loans, payroll, and recruitment for the university.</p>
+      <form id="login-form">
+        <div class="field" id="hr-email-field">
+          <label for="email">Work email</label>
+          <input id="email" type="email" autocomplete="username" value="hr@unre.ac.pg" />
+        </div>
+        <div class="field hidden" id="staff-email-field">
+          <label for="staff-email">Staff member</label>
+          <select id="staff-email"></select>
+        </div>
+        <div class="field">
+          <label for="password">Password</label>
+          <input id="password" type="password" autocomplete="current-password" value="unre2026" required />
+        </div>
+        <button class="btn btn-primary full" type="submit" id="login-btn">Enter HR office</button>
+      </form>
+      <div class="hint" id="login-hint">HR demo: <strong>hr@unre.ac.pg</strong> / <strong>unre2026</strong></div>
+    </div>
+    </div>
+  </div>
+
+  <div id="app" class="app hidden">
+    <header class="topbar">
+      <div class="acting">
+        <span id="acting-label">You're acting as</span>
+        <span class="pill" id="actor-pill">HR Administrator</span>
+      </div>
+      <button class="exit" id="logout" type="button">Sign out</button>
+    </header>
+    <div class="shell">
+      <aside class="sidebar">
+        <div class="side-brand">
+          <img src="assets/unre-logo.jpg" alt="Papua New Guinea University of Natural Resources and Environment" />
+          <div>
+            <strong id="side-title">UNRE HR</strong>
+            <span id="side-sub">Natural Resources &amp; Environment</span>
+          </div>
+        </div>
+        <nav class="nav" id="nav"></nav>
+        <div class="side-foot">© 2026 UNRE · Papua New Guinea</div>
+      </aside>
+      <main class="main" id="view"></main>
+    </div>
+  </div>
+
+  <div id="modal" class="modal-back hidden"></div>
+  <div id="toast" class="toast hidden"></div>
+  <script src="app.js"></script>
+</body>
+</html>
