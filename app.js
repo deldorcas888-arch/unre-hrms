@@ -141,27 +141,39 @@ function save() { localStorage.setItem(KEY, JSON.stringify(state)); }
 function unreadFileNotifications() {
   return (state.notifications || []).filter((n) => n.type === "file-update" && !n.read);
 }
-function addFileNotification(employee, doc, action) {
+function notificationsForSession() {
+  if (!session) return [];
+  return (state.notifications || []).filter((n) =>
+    !n.read && (session.role === "hr" ? n.recipientRole === "hr" : n.employeeId === session.employeeId)
+  );
+}
+function addNotification(notification) {
   state.notifications = state.notifications || [];
   state.notifications.unshift({
     id: uid("n"),
+    createdAt: todayIso(),
+    read: false,
+    ...notification
+  });
+}
+function addFileNotification(employee, doc, action) {
+  addNotification({
     type: "file-update",
+    recipientRole: "hr",
     employeeId: employee.id,
     documentId: doc.id,
     employeeName: employee.name,
     fileName: doc.name,
     fileKind: doc.kind,
     action,
-    createdAt: todayIso(),
-    read: false
   });
 }
 function updateNotificationControl() {
   const button = document.getElementById("file-notifications");
   if (!button) return;
-  const count = isHr() ? unreadFileNotifications().length : 0;
+  const count = notificationsForSession().length;
   button.classList.toggle("hidden", count === 0);
-  button.innerHTML = `&#128276; File updates <span class="notification-count">${count}</span>`;
+  button.innerHTML = `&#128276; Notifications <span class="notification-count">${count}</span>`;
 }
 function markNotificationRead(id) {
   const item = (state.notifications || []).find((n) => n.id === id);
@@ -511,7 +523,7 @@ function renderDashboard() {
   const onLeave = state.employees.filter((e) => e.status === "On Leave").length;
   const types = countsByType();
   const max = Math.max(...types.map((x) => x.n), 1);
-  const fileNotifications = unreadFileNotifications();
+  const notifications = notificationsForSession();
   return `
     <div class="page-head"><div><h2>Dashboard</h2><p>University of Natural Resources and Environment — HR office</p></div></div>
     <div class="stats">
@@ -527,12 +539,12 @@ function renderDashboard() {
       </div>
     </div>
     <div class="grid-2" style="margin-top:14px">
-      <div class="card"><h3>Employee file updates</h3>
-        ${fileNotifications.length ? fileNotifications.slice(0, 5).map((n) => `
+      <div class="card"><h3>Notifications</h3>
+        ${notifications.length ? notifications.slice(0, 5).map((n) => `
           <div class="leave-mini notification-row">
-            <div><strong>${esc(n.employeeName)}</strong><div class="meta">${esc(n.action)} ${esc(n.fileKind).toLowerCase()} · ${esc(n.fileName)}</div><div class="meta">${esc(n.createdAt)}</div></div>
-            <button class="btn btn-ghost" data-notification="${n.id}">View record</button>
-          </div>`).join("") : `<div class="empty">No new employee file updates.</div>`}
+            <div><strong>${esc(n.title || n.employeeName || "Notification")}</strong><div class="meta">${esc(n.message || `${n.action} ${n.fileKind}`)}</div><div class="meta">${esc(n.createdAt)}</div></div>
+            <button class="btn btn-ghost" data-notification="${n.id}">View</button>
+          </div>`).join("") : `<div class="empty">No new notifications.</div>`}
       </div>
       <div class="card"><h3>Staff loans awaiting decision <button class="link" data-go="loans">Review</button></h3>
         ${pendingLoans.length ? pendingLoans.map((l) => `<div class="leave-mini"><div><strong>${l.employee}</strong><div class="meta">${l.kind} · ${kina(l.amount)} · ${l.term} months</div></div>${badge(l.status)}</div>`).join("") : `<div class="empty">No loan files in the queue.</div>`}
@@ -760,6 +772,7 @@ function renderStaffHome() {
   const pendingL = myLeave.filter((l) => l.status === "Pending").length;
   const myLoans = state.loans.filter((l) => l.employee === person.name);
   const pendingN = myLoans.filter((l) => l.status === "Pending").length;
+  const notifications = notificationsForSession();
   return `
     <div class="page-head"><div><h2>Welcome, ${person.name.split(" ").slice(-1)[0]}</h2>
       <p>${person.role} · ${person.dept} · staff self-service</p></div></div>
@@ -770,6 +783,13 @@ function renderStaffHome() {
       <div class="stat"><div class="k">Net this month</div><div class="n" style="font-size:26px">${kina(p.net)}</div><div class="s">After NASFUND, PAYE, loans</div></div>
     </div>
     <div class="grid-2">
+      <div class="card"><h3>Notifications</h3>
+        ${notifications.length ? notifications.slice(0, 5).map((n) => `
+          <div class="leave-mini notification-row">
+            <div><strong>${esc(n.title || "Notification")}</strong><div class="meta">${esc(n.message || "")}</div><div class="meta">${esc(n.createdAt)}</div></div>
+            <button class="btn btn-ghost" data-notification="${n.id}">View</button>
+          </div>`).join("") : `<div class="empty">No new notifications.</div>`}
+      </div>
       <div class="card"><h3>Quick actions</h3>
         <div class="actions"><button class="btn btn-primary" data-open="leave">Request leave</button>
         <button class="btn btn-ghost" data-open="loan">Apply for a loan</button></div>
@@ -1106,6 +1126,14 @@ function applyToJob(jobId) {
     statement: "Internal application submitted from staff self-service.",
     status: "Pending"
   });
+  addNotification({
+    type: "request-submitted",
+    recipientRole: "hr",
+    title: "New job application",
+    employeeName: person.name,
+    message: `${person.name} applied for ${job.title}.`,
+    targetPage: "jobs"
+  });
   syncApplicants(job);
   save();
   toast("Application sent to HR.");
@@ -1188,7 +1216,8 @@ function bindPage(page) {
     const item = (state.notifications || []).find((n) => n.id === b.dataset.notification);
     if (!item) return;
     markNotificationRead(item.id);
-    openEmployeeModal(item.employeeId);
+    if (item.targetPage) location.hash = "#/" + item.targetPage;
+    if (item.employeeId && item.type === "file-update") openEmployeeModal(item.employeeId);
   }; });
   document.querySelectorAll("[data-dept]").forEach((b) => {
     b.onclick = () => openDeptModal(b.dataset.dept);
@@ -1216,7 +1245,16 @@ function bindPage(page) {
     const item = state.leave.find((l) => l.id === b.dataset.leave);
     item.status = b.dataset.act;
     const emp = state.employees.find((e) => e.name === item.employee);
-    if (emp) emp.status = item.status === "Approved" ? "On Leave" : "Active";
+    if (emp) {
+      emp.status = item.status === "Approved" ? "On Leave" : "Active";
+      addNotification({
+        type: "request-status",
+        employeeId: emp.id,
+        title: `Leave ${item.status.toLowerCase()}`,
+        message: `Your ${item.type.toLowerCase()} leave request for ${item.start} to ${item.end} was ${item.status.toLowerCase()}.`,
+        targetPage: "leave"
+      });
+    }
     save(); toast(`Leave ${item.status.toLowerCase()} for ${item.employee}.`); route();
   }; });
   document.querySelectorAll("[data-publish]").forEach((b) => { b.onclick = (e) => {
@@ -1239,6 +1277,13 @@ function bindPage(page) {
       item.repaid = item.repaid || 0;
     }
     item.status = b.dataset.act;
+    addNotification({
+      type: "request-status",
+      employeeId: emp.id,
+      title: `Loan ${item.status.toLowerCase()}`,
+      message: `Your ${item.kind.toLowerCase()} loan application for ${kina(item.amount)} was ${item.status.toLowerCase()}.`,
+      targetPage: "loans"
+    });
     save(); toast(`Loan ${item.status.toLowerCase()} for ${item.employee}.`); route();
   }; });
 }
@@ -1270,7 +1315,17 @@ document.getElementById("modal").addEventListener("click", (e) => {
     if (!isHr()) return;
     const app = state.applications.find((a) => a.id === decide.dataset.appId);
     if (!app || app.status !== "Pending") return;
+    const job = state.jobs.find((j) => j.id === app.jobId);
     app.status = decide.dataset.appAct;
+    if (app.employeeId) {
+      addNotification({
+        type: "request-status",
+        employeeId: app.employeeId,
+        title: `Job application ${app.status.toLowerCase()}`,
+        message: `Your application for ${job ? job.title : "the internal job"} was ${app.status.toLowerCase()}.`,
+        targetPage: "jobs"
+      });
+    }
     save();
     toast(`${app.employee} ${app.status.toLowerCase()} for this posting.`);
     route();
@@ -1334,7 +1389,16 @@ document.getElementById("modal").addEventListener("submit", async (e) => {
   if (form.id === "f-leave") {
     const emp = state.employees.find((x) => x.id === data.employee);
     if (session.role === "staff" && emp.id !== session.employeeId) { toast("You can only file your own leave."); return; }
-    state.leave.unshift({ id: uid("l"), employee: emp.name, dept: emp.dept, type: data.type, start: data.start, end: data.end, note: data.note, status: "Pending" });
+    const request = { id: uid("l"), employee: emp.name, dept: emp.dept, type: data.type, start: data.start, end: data.end, note: data.note, status: "Pending" };
+    state.leave.unshift(request);
+    addNotification({
+      type: "request-submitted",
+      recipientRole: "hr",
+      title: "New leave request",
+      employeeName: emp.name,
+      message: `${emp.name} submitted ${data.type.toLowerCase()} leave for ${data.start} to ${data.end}.`,
+      targetPage: "leave"
+    });
     toast("Leave submitted to HR.");
   }
   if (form.id === "f-job") {
@@ -1351,6 +1415,14 @@ document.getElementById("modal").addEventListener("submit", async (e) => {
       toast(check.reason); return;
     }
     state.loans.unshift({ id: uid("n"), employee: emp.name, dept: emp.dept, kind: data.kind, amount, term: Number(data.term), reason: data.reason, status: "Pending", salary: emp.salary });
+    addNotification({
+      type: "request-submitted",
+      recipientRole: "hr",
+      title: "New loan application",
+      employeeName: emp.name,
+      message: `${emp.name} submitted a ${data.kind.toLowerCase()} loan application for ${kina(amount)}.`,
+      targetPage: "loans"
+    });
     toast("Loan application submitted to HR.");
   }
   if (form.id === "f-roster") {
@@ -1468,7 +1540,7 @@ window.addEventListener("storage", (e) => {
   if (e.key !== KEY || !e.newValue) return;
   try {
     state = JSON.parse(e.newValue);
-    if (session?.role === "hr") {
+    if (session) {
       updateNotificationControl();
       route();
     }
