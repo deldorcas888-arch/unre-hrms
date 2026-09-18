@@ -115,7 +115,7 @@ let state = load();
 let viewMode = { employees: "All", leave: "list", portal: "hr" };
 let session = null;
 
-const FILE_KINDS = ["Resume", "Achievement certificate", "Qualification", "ID / appointment letter", "Other"];
+const FILE_KINDS = ["Resume", "Achievement certificate", "Qualification", "ID / appointment letter", "Profile picture", "Other"];
 const FILE_MAX = 1200000;
 
 function load() {
@@ -123,17 +123,53 @@ function load() {
     const raw = localStorage.getItem(KEY);
     if (raw) {
       const data = JSON.parse(raw);
+      if (!Array.isArray(data.notifications)) data.notifications = [];
       if (!Array.isArray(data.documents)) data.documents = structuredClone(SEED.documents);
       else {
         const have = new Set(data.documents.map((d) => d.id));
         SEED.documents.forEach((d) => { if (!have.has(d.id)) data.documents.push(d); });
       }
+
       return data;
     }
   } catch (_) {}
-  return structuredClone(SEED);
+  const initial = structuredClone(SEED);
+  initial.notifications = [];
+  return initial;
 }
 function save() { localStorage.setItem(KEY, JSON.stringify(state)); }
+function unreadFileNotifications() {
+  return (state.notifications || []).filter((n) => n.type === "file-update" && !n.read);
+}
+function addFileNotification(employee, doc, action) {
+  state.notifications = state.notifications || [];
+  state.notifications.unshift({
+    id: uid("n"),
+    type: "file-update",
+    employeeId: employee.id,
+    documentId: doc.id,
+    employeeName: employee.name,
+    fileName: doc.name,
+    fileKind: doc.kind,
+    action,
+    createdAt: todayIso(),
+    read: false
+  });
+}
+function updateNotificationControl() {
+  const button = document.getElementById("file-notifications");
+  if (!button) return;
+  const count = isHr() ? unreadFileNotifications().length : 0;
+  button.classList.toggle("hidden", count === 0);
+  button.innerHTML = `&#128276; File updates <span class="notification-count">${count}</span>`;
+}
+function markNotificationRead(id) {
+  const item = (state.notifications || []).find((n) => n.id === id);
+  if (!item) return;
+  item.read = true;
+  save();
+  updateNotificationControl();
+}
 function uid(prefix) { return prefix + Math.random().toString(36).slice(2, 8); }
 function toast(msg) {
   const el = document.getElementById("toast");
@@ -475,6 +511,7 @@ function renderDashboard() {
   const onLeave = state.employees.filter((e) => e.status === "On Leave").length;
   const types = countsByType();
   const max = Math.max(...types.map((x) => x.n), 1);
+  const fileNotifications = unreadFileNotifications();
   return `
     <div class="page-head"><div><h2>Dashboard</h2><p>University of Natural Resources and Environment — HR office</p></div></div>
     <div class="stats">
@@ -490,6 +527,13 @@ function renderDashboard() {
       </div>
     </div>
     <div class="grid-2" style="margin-top:14px">
+      <div class="card"><h3>Employee file updates</h3>
+        ${fileNotifications.length ? fileNotifications.slice(0, 5).map((n) => `
+          <div class="leave-mini notification-row">
+            <div><strong>${esc(n.employeeName)}</strong><div class="meta">${esc(n.action)} ${esc(n.fileKind).toLowerCase()} · ${esc(n.fileName)}</div><div class="meta">${esc(n.createdAt)}</div></div>
+            <button class="btn btn-ghost" data-notification="${n.id}">View record</button>
+          </div>`).join("") : `<div class="empty">No new employee file updates.</div>`}
+      </div>
       <div class="card"><h3>Staff loans awaiting decision <button class="link" data-go="loans">Review</button></h3>
         ${pendingLoans.length ? pendingLoans.map((l) => `<div class="leave-mini"><div><strong>${l.employee}</strong><div class="meta">${l.kind} · ${kina(l.amount)} · ${l.term} months</div></div>${badge(l.status)}</div>`).join("") : `<div class="empty">No loan files in the queue.</div>`}
       </div>
@@ -567,8 +611,9 @@ function renderLeaveStaff() {
 }
 
 function leaveCard(l, canDecide) {
+  const employee = state.employees.find((e) => e.name === l.employee);
   return `
-    <article class="person"><div class="row-between"><div class="person-top"><div class="avatar">${initials(l.employee)}</div>
+    <article class="person"><div class="row-between"><div class="person-top">${employeeAvatarHtml(employee || l.employee)}
       <div><strong>${l.employee}</strong><div class="meta">${l.dept}</div></div></div>${badge(l.status)}</div>
       <div class="kv"><span>Type ${l.type}</span><span>Start ${l.start}</span><span>End ${l.end}</span></div>
       <p class="meta">${l.note}</p>
@@ -818,11 +863,14 @@ function openEmployeeModal(employeeId, fromDeptId) {
   const list = fileRowsHtml(docs, { edit });
   showModal(`
     ${backDept}
-    <h3 style="${fromDeptId ? "margin-top:10px" : ""}">${emp.name}</h3>
+    <div class="person-top" style="${fromDeptId ? "margin-top:10px" : ""}">
+      ${employeeAvatarHtml(emp)}
+      <div><h3 style="margin:0">${emp.name}</h3><div class="meta">${emp.role}</div></div>
+    </div>
     <div class="kv" style="margin-top:0"><span>${emp.role}</span><span>${emp.dept}</span><span>${emp.type}</span>${badge(emp.status)}</div>
     <p class="modal-copy">${emp.email} · annual ${kina(emp.salary)}</p>
     <h4 class="modal-sub">Personnel files</h4>
-    <p class="meta">${isHr() ? "Staff can upload or replace these from My profile. You see every update here." : "HR can see these files from the Employees list as soon as you upload or replace them."}</p>
+    <p class="meta">${isHr() ? "You can view, upload, and replace personnel files. Employees can manage their own files from My profile." : "You can upload or replace your personnel files. HR can view every update."}</p>
     ${list}
     ${edit ? `<form id="f-doc">
       <input type="hidden" name="employeeId" value="${emp.id}" />
@@ -885,7 +933,11 @@ async function storeUploadedFile(file, fields) {
   if (!file) { toast("Choose a file first."); return false; }
   if (file.size > FILE_MAX) { toast("File is too large. Use one under 1 MB."); return false; }
   const emp = state.employees.find((e) => e.id === fields.employeeId);
-  if (!emp || !canEditEmpFiles(emp)) { toast("You cannot change these files."); return false; }
+  if (!emp || !canEditEmpFiles(emp)) { toast("Only the employee can update personnel files."); return false; }
+  if (fields.kind === "Profile picture" && !file.type.startsWith("image/")) {
+    toast("Profile picture must be an image file.");
+    return false;
+  }
   let dataUrl;
   try {
     dataUrl = await readFileData(file);
@@ -903,10 +955,15 @@ async function storeUploadedFile(file, fields) {
     doc.dataUrl = dataUrl;
     doc.body = "";
     doc.updatedAt = todayIso();
+    if (doc.kind === "Profile picture") emp.photoDataUrl = dataUrl;
     if (!persistDocs()) return false;
+    if (session?.role === "staff") {
+      addFileNotification(emp, doc, "Updated");
+      save();
+    }
     toast(`Updated ${doc.kind} for ${emp.name}.`);
   } else {
-    state.documents.unshift({
+    const doc = {
       id: uid("f"),
       employeeId: emp.id,
       kind: FILE_KINDS.includes(fields.kind) ? fields.kind : "Other",
@@ -916,10 +973,16 @@ async function storeUploadedFile(file, fields) {
       dataUrl,
       uploadedAt: todayIso(),
       updatedAt: todayIso()
-    });
+    };
+    if (doc.kind === "Profile picture") emp.photoDataUrl = dataUrl;
+    state.documents.unshift(doc);
     if (!persistDocs()) {
       state.documents.shift();
       return false;
+    }
+    if (session?.role === "staff") {
+      addFileNotification(emp, doc, "Uploaded");
+      save();
     }
     toast(`Uploaded ${fields.kind || "file"} — HR can see it.`);
   }
@@ -1121,6 +1184,12 @@ function closeModal() { document.getElementById("modal").classList.add("hidden")
 function bindPage(page) {
   document.querySelectorAll("[data-go]").forEach((b) => { b.onclick = () => { location.hash = "#/" + b.dataset.go; }; });
   document.querySelectorAll("[data-open]").forEach((b) => { b.onclick = () => openModal(b.dataset.open); });
+  document.querySelectorAll("[data-notification]").forEach((b) => { b.onclick = () => {
+    const item = (state.notifications || []).find((n) => n.id === b.dataset.notification);
+    if (!item) return;
+    markNotificationRead(item.id);
+    openEmployeeModal(item.employeeId);
+  }; });
   document.querySelectorAll("[data-dept]").forEach((b) => {
     b.onclick = () => openDeptModal(b.dataset.dept);
     b.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openDeptModal(b.dataset.dept); } };
@@ -1384,12 +1453,29 @@ function showApp() {
   document.body.classList.toggle("role-hr", session.role === "hr");
   document.getElementById("acting-label").textContent = session.role === "hr" ? "HR office · signed in as" : "Staff self-service · signed in as";
   document.getElementById("actor-pill").textContent = session.label;
+  updateNotificationControl();
   document.getElementById("side-title").textContent = session.role === "hr" ? "UNRE HR" : "UNRE Staff";
   document.getElementById("side-sub").textContent = session.role === "hr" ? "Natural Resources & Environment" : "Self-service portal";
   location.hash = session.role === "hr" ? "#/dashboard" : "#/home";
   renderNav();
   route();
 }
+
+document.getElementById("file-notifications").addEventListener("click", () => {
+  location.hash = "#/dashboard";
+});
+window.addEventListener("storage", (e) => {
+  if (e.key !== KEY || !e.newValue) return;
+  try {
+    state = JSON.parse(e.newValue);
+    if (session?.role === "hr") {
+      updateNotificationControl();
+      route();
+    }
+  } catch (_) {
+    toast("Could not refresh employee file updates.");
+  }
+});
 
 document.getElementById("login-form").addEventListener("submit", (e) => {
   e.preventDefault();

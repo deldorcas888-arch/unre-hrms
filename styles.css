@@ -183,6 +183,28 @@ body.role-hr .app { background: #f3f1ea; }
   padding: 0 18px;
   flex-shrink: 0;
 }
+.topbar-actions { display: flex; align-items: center; gap: 14px; }
+.notification-trigger {
+  border: 1px solid rgba(255,255,255,.35);
+  border-radius: 999px;
+  padding: 6px 10px;
+  background: rgba(255,255,255,.14);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+}
+.notification-count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  margin-left: 4px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #fff;
+  color: var(--brand);
+}
+.notification-row { align-items: center; }
 .acting { display: flex; align-items: center; gap: 10px; font-size: 14px; }
 .pill {
   background: #fff;
