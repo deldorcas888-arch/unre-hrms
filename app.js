@@ -244,7 +244,7 @@ function employeeAvatarHtml(employeeOrName) {
   return `<div class="avatar"><img src="${generatedAvatarDataUrl(employee.name)}" alt="${esc(employee.name)} profile picture" /></div>`;
 }
 function badge(status) {
-  const map = { Pending: "b-pending", Approved: "b-approved", Rejected: "b-rejected", Active: "b-active", "On Leave": "b-leave", Open: "b-open", Draft: "b-draft", Closed: "b-closed", Accepted: "b-approved", Declined: "b-rejected" };
+  const map = { Pending: "b-pending", Approved: "b-approved", Rejected: "b-rejected", Active: "b-active", "On Leave": "b-leave", Open: "b-open", Draft: "b-draft", Closed: "b-closed", Accepted: "b-approved", Declined: "b-rejected", "Contract signed": "b-approved" };
   return `<span class="badge ${map[status] || "b-draft"}">${status}</span>`;
 }
 function deptStaff(name) {
@@ -340,6 +340,13 @@ function applicationFit(job, app) {
 }
 function kina(n) { return "K" + Number(n).toLocaleString("en-PG", { maximumFractionDigits: 0 }); }
 function kina2(n) { return "K" + Number(n).toLocaleString("en-PG", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+function jobSalaryRange(pay) {
+  const values = [...String(pay || "").matchAll(/K\s*([\d,.]+)\s*([km]?)/gi)]
+    .map((match) => Number(match[1].replace(/,/g, "")) * (match[2].toLowerCase() === "m" ? 1000000 : match[2].toLowerCase() === "k" ? 1000 : 1))
+    .filter((value) => Number.isFinite(value) && value > 0);
+  if (!values.length) return null;
+  return { min: Math.min(...values), max: Math.max(...values) };
+}
 function isHr() { return session?.role === "hr"; }
 function me() {
   if (!session || session.role !== "staff") return null;
@@ -1074,6 +1081,7 @@ function openAppModal(id) {
   const emp = app.employeeId ? state.employees.find((e) => e.id === app.employeeId) : null;
   const fit = applicationFit(j, app);
   const docs = appDocs(app);
+  const contractSigned = app.contractStatus === "Signed";
   showModal(`
     <button type="button" class="link" data-job-back="${j.id}">← Back to ${j.title}</button>
     <h3 style="margin-top:10px">${app.employee}</h3>
@@ -1082,6 +1090,7 @@ function openAppModal(id) {
       <span>Applied ${app.at}</span>
       ${emp ? `<span>${emp.role} · ${emp.dept}</span>` : ""}
       ${badge(app.status)}
+      ${contractSigned ? badge("Contract signed") : ""}
     </div>
     <div class="fit-box ${fit.qualified ? "fit-yes" : "fit-no"}">
       <div class="row-between"><strong>${fit.qualified ? "Qualifies for shortlist" : "Does not clearly qualify"}</strong><span>Score ${fit.score}/100</span></div>
@@ -1105,7 +1114,31 @@ function openAppModal(id) {
       ${app.status === "Pending" ? `
         <button type="button" class="btn btn-danger" data-app-act="Declined" data-app-id="${app.id}">Decline</button>
         <button type="button" class="btn btn-ok" data-app-act="Accepted" data-app-id="${app.id}">Accept</button>` : ""}
+      ${app.status === "Accepted" && app.employeeId && !contractSigned ? `<button type="button" class="btn btn-brand" data-contract="${app.id}">Sign contract</button>` : ""}
     </div>
+  `, true);
+}
+
+function openContractModal(id) {
+  if (!isHr()) return;
+  const app = (state.applications || []).find((item) => item.id === id);
+  const job = app && state.jobs.find((item) => item.id === app.jobId);
+  const emp = app && app.employeeId ? state.employees.find((item) => item.id === app.employeeId) : null;
+  if (!app || !job || !emp || app.status !== "Accepted" || app.contractStatus === "Signed") return;
+  const range = jobSalaryRange(job.pay);
+  const defaultSalary = range ? Math.round((range.min + range.max) / 2) : emp.salary;
+  showModal(`
+    <h3>Sign employment contract</h3>
+    <p class="modal-copy"><strong>${esc(emp.name)}</strong> will be appointed as <strong>${esc(job.title)}</strong>.</p>
+    <form id="f-contract">
+      <input type="hidden" name="applicationId" value="${app.id}" />
+      <div class="field"><label>New annual salary (Kina)</label><input name="salary" type="number" min="1" step="1" value="${defaultSalary}" required /></div>
+      <p class="meta">${range ? `Agreed salary must be between ${kina(range.min)} and ${kina(range.max)} for the advertised range ${esc(job.pay)}.` : `The advertised pay is ${esc(job.pay)}.`}</p>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-ghost" data-close>Cancel</button>
+        <button class="btn btn-primary">Sign contract with HR</button>
+      </div>
+    </form>
   `, true);
 }
 
@@ -1341,11 +1374,52 @@ document.getElementById("modal").addEventListener("click", (e) => {
   }
   const apply = e.target.closest("[data-apply]");
   if (apply) { applyToJob(apply.dataset.apply); route(); openJobModal(apply.dataset.apply); }
+  const contract = e.target.closest("[data-contract]");
+  if (contract) { openContractModal(contract.dataset.contract); }
 });
 document.getElementById("modal").addEventListener("submit", async (e) => {
   e.preventDefault();
   const form = e.target;
   const data = Object.fromEntries(new FormData(form));
+  if (form.id === "f-contract") {
+    if (!isHr()) return;
+    const app = (state.applications || []).find((item) => item.id === data.applicationId);
+    const job = app && state.jobs.find((item) => item.id === app.jobId);
+    const emp = app && app.employeeId ? state.employees.find((item) => item.id === app.employeeId) : null;
+    const salary = Number(data.salary);
+    const range = jobSalaryRange(job?.pay);
+    if (!app || !job || !emp || app.status !== "Accepted" || app.contractStatus === "Signed") {
+      toast("This employment offer is no longer available.");
+      return;
+    }
+    if (!Number.isFinite(salary) || salary <= 0 || (range && (salary < range.min || salary > range.max))) {
+      toast(range ? `Salary must be between ${kina(range.min)} and ${kina(range.max)}.` : "Enter a valid annual salary.");
+      return;
+    }
+    const previousDept = state.departments.find((item) => item.name === emp.dept);
+    const nextDept = state.departments.find((item) => item.name === job.dept);
+    if (previousDept && previousDept !== nextDept) previousDept.members = Math.max(0, (previousDept.members || 0) - 1);
+    if (nextDept && previousDept !== nextDept) nextDept.members = (nextDept.members || 0) + 1;
+    emp.role = job.title;
+    emp.salary = salary;
+    emp.dept = job.dept;
+    emp.type = job.band;
+    app.contractStatus = "Signed";
+    app.contractSalary = salary;
+    app.contractSignedAt = todayIso();
+    addNotification({
+      type: "request-status",
+      employeeId: emp.id,
+      title: "Employment contract signed",
+      message: `Your contract for ${job.title} is signed. Your annual salary is ${kina(salary)}.`,
+      targetPage: "profile"
+    });
+    save();
+    closeModal();
+    toast(`${emp.name}'s contract is signed. Role and payslip updated.`);
+    route();
+    return;
+  }
   if (form.id === "f-doc") {
     const file = form.querySelector("#doc-new-file")?.files[0];
     const ok = await storeUploadedFile(file, { employeeId: data.employeeId, kind: data.kind });
