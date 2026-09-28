@@ -38,11 +38,11 @@
       <form id="login-form">
         <div class="field" id="hr-email-field">
           <label for="email">Work email</label>
-          <input id="email" type="email" autocomplete="username" value="hr@unre.ac.pg" />
+          <input id="email" type="email" autocomplete="username" value="hr@unre.ac.pg" required />
         </div>
         <div class="field hidden" id="staff-email-field">
-          <label for="staff-email">Staff member</label>
-          <select id="staff-email"></select>
+          <label for="staff-username">Username</label>
+          <input id="staff-username" type="text" autocomplete="username" placeholder="Your UNRE work email" />
         </div>
         <div class="field">
           <label for="password">Password</label>
@@ -57,13 +57,17 @@
 
   <div id="app" class="app hidden">
     <header class="topbar">
-      <div class="acting">
-        <span id="acting-label">You're acting as</span>
-        <span class="pill" id="actor-pill">HR Administrator</span>
+      <div class="topbar-context">
+        <span class="topbar-eyebrow">UNRE · HUMAN RESOURCES</span>
+        <div class="acting">
+          <span id="acting-label">You're acting as</span>
+          <span class="pill" id="actor-pill">HR Administrator</span>
+        </div>
       </div>
       <div class="topbar-actions">
         <button class="notification-trigger hidden" id="file-notifications" type="button" aria-label="View notifications"></button>
-        <button class="exit" id="logout" type="button">Sign out</button>
+        <span class="topbar-campus">Vudal campus · Papua New Guinea</span>
+        <button class="exit" id="logout" type="button">Sign out <span aria-hidden="true">→</span></button>
       </div>
     </header>
     <div class="shell">

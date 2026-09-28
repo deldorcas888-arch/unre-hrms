@@ -1,0 +1,24 @@
+{
+  "name": "unre-hr",
+  "version": "1.0.0",
+  "private": true,
+  "description": "UNRE HR portal backend",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "check": "node --check server.js",
+    "db:seed": "node db/seed.js"
+  },
+  "engines": { "node": ">=20" },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cookie-session": "^2.1.0",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.1",
+    "express-rate-limit": "^7.4.1",
+    "helmet": "^8.0.0",
+    "multer": "^2.0.0",
+    "pg": "^8.13.1"
+  }
+}
