@@ -51,10 +51,14 @@ records in PostgreSQL; it does not use the prototype's `localStorage` data.
 Opening `index.html` directly from disk (`file://`) uses the browser-only demo
 automatically because a local file has no backend API. On localhost, a
 static-only server is also detected and uses the demo automatically. When a
-backend is available, it is used by default; append `?demo=1` to explicitly
-use the browser-only demo instead (or set `localStorage.unre-demo-mode` to
-`"true"`). Backend login/session and core employee, leave, attendance, loan,
-and payroll records are loaded through the API when demo mode is not enabled.
+static-only server or GitHub Pages deployment is detected and uses the demo
+automatically; GitHub Pages cannot run the Express `/api` backend. Demo data
+is saved only in that browser. When a backend is available, it is used by
+default; append `?demo=1` to explicitly use the browser-only demo instead (or
+set `localStorage.unre-demo-mode` to `"true"`). For database-backed use,
+deploy the Express app alongside PostgreSQL and open its application URL.
+Backend login/session and core employee, leave, attendance, loan, and payroll
+records are loaded through the API when demo mode is not enabled.
 
 `npm run db:seed` creates (or safely updates) the HR administrator from
 `ADMIN_EMAIL`/`ADMIN_PASSWORD`, plus an Administration department and linked

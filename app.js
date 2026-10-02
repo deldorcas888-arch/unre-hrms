@@ -131,12 +131,15 @@ const SEED = {
 
 const KEY = "unre-hr-v4";
 const DEMO_PASS = "unre2026";
+const configuredApiBase = document.querySelector("meta[name='unre-api-base']")?.content;
 // Directly opened files have no API origin, so use the local demo automatically.
-// HTTP deployments use the backend unless demo mode is explicitly requested.
+// GitHub Pages is static hosting, so it can only use the browser demo unless
+// an API base is explicitly configured.
 let DEMO_MODE = new URLSearchParams(location.search).get("demo") === "1" ||
   location.protocol === "file:" ||
+  (location.hostname.endsWith(".github.io") && !configuredApiBase) ||
   localStorage.getItem("unre-demo-mode") === "true";
-const API_BASE = (document.querySelector("meta[name='unre-api-base']")?.content || "/api").replace(/\/$/, "");
+const API_BASE = (configuredApiBase || "/api").replace(/\/$/, "");
 let csrfToken = null;
 let state = load();
 let viewMode = {
@@ -3448,10 +3451,9 @@ async function initializeApp() {
     return;
   }
   const contentType = health.headers.get("content-type") || "";
-  const localStaticHost = ["localhost", "127.0.0.1", "::1"].includes(location.hostname) &&
-    ((health.status === 404 && !contentType.includes("application/json")) ||
-      (health.ok && contentType.includes("text/html")));
-  if (localStaticHost) {
+  const staticOnlyResponse = !contentType.includes("application/json") &&
+    ([404, 405].includes(health.status) || (health.ok && contentType.includes("text/html")));
+  if (staticOnlyResponse) {
     DEMO_MODE = true;
     restoreDemoSession();
     return;
