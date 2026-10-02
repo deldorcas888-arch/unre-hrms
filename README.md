@@ -48,11 +48,13 @@ PostgreSQL with `docker compose up -d postgres`, then run `npm install` and
 authenticated `/api` routes documented in `DEPLOYMENT.md`. The backend stores
 records in PostgreSQL; it does not use the prototype's `localStorage` data.
 
-The frontend uses the backend by default. To explicitly use the original
-browser-only demo, open `index.html?demo=1` (or set
-`localStorage.unre-demo-mode` to `"true"`). Backend login/session and core
-employee, leave, attendance, loan, and payroll records are loaded through the
-API when demo mode is not enabled.
+Opening `index.html` directly from disk (`file://`) uses the browser-only demo
+automatically because a local file has no backend API. On localhost, a
+static-only server is also detected and uses the demo automatically. When a
+backend is available, it is used by default; append `?demo=1` to explicitly
+use the browser-only demo instead (or set `localStorage.unre-demo-mode` to
+`"true"`). Backend login/session and core employee, leave, attendance, loan,
+and payroll records are loaded through the API when demo mode is not enabled.
 
 `npm run db:seed` creates (or safely updates) the HR administrator from
 `ADMIN_EMAIL`/`ADMIN_PASSWORD`, plus an Administration department and linked

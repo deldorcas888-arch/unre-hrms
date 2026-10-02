@@ -131,9 +131,10 @@ const SEED = {
 
 const KEY = "unre-hr-v4";
 const DEMO_PASS = "unre2026";
-// The backend is the default. LocalStorage demo data is opt-in via ?demo=1 or
-// localStorage.setItem("unre-demo-mode", "true").
-const DEMO_MODE = new URLSearchParams(location.search).get("demo") === "1" ||
+// Directly opened files have no API origin, so use the local demo automatically.
+// HTTP deployments use the backend unless demo mode is explicitly requested.
+let DEMO_MODE = new URLSearchParams(location.search).get("demo") === "1" ||
+  location.protocol === "file:" ||
   localStorage.getItem("unre-demo-mode") === "true";
 const API_BASE = (document.querySelector("meta[name='unre-api-base']")?.content || "/api").replace(/\/$/, "");
 let csrfToken = null;
@@ -181,7 +182,12 @@ async function apiRequest(path, options = {}) {
   const isFormData = typeof FormData !== "undefined" && options.body instanceof FormData;
   const headers = { Accept: "application/json", ...(options.body && !isFormData ? { "Content-Type": "application/json" } : {}), ...(options.headers || {}) };
   if (csrfToken && !["GET", "HEAD"].includes((options.method || "GET").toUpperCase())) headers["X-CSRF-Token"] = csrfToken;
-  const response = await fetch(`${API_BASE}${path}`, { credentials: "same-origin", ...options, headers });
+  let response;
+  try {
+    response = await fetch(`${API_BASE}${path}`, { credentials: "same-origin", ...options, headers });
+  } catch (error) {
+    throw new Error(`Could not reach the UNRE HR backend. Start it with "npm start" and open http://localhost:3000. For a browser-only demo, open index.html?demo=1. ${error.message}`);
+  }
   let payload = null;
   try { payload = await response.json(); } catch (_) {}
   if (!response.ok) throw new Error(payload?.error || `Request failed (${response.status})`);
@@ -3423,16 +3429,41 @@ document.getElementById("logout").addEventListener("click", async () => {
 });
 
 window.addEventListener("hashchange", route);
-try {
-  const saved = JSON.parse(sessionStorage.getItem("unre-session") || "null");
-  if (saved?.role && DEMO_MODE) { session = saved; showApp(); }
-} catch (_) {}
-if (!DEMO_MODE) {
-  apiRequest("/auth/me").then(async (result) => {
+function restoreDemoSession() {
+  try {
+    const saved = JSON.parse(sessionStorage.getItem("unre-session") || "null");
+    if (saved?.role) { session = saved; showApp(); }
+  } catch (_) {}
+}
+
+async function initializeApp() {
+  if (DEMO_MODE) {
+    restoreDemoSession();
+    return;
+  }
+  let health;
+  try {
+    health = await fetch(`${API_BASE}/health`, { headers: { Accept: "application/json" } });
+  } catch (_) {
+    return;
+  }
+  const contentType = health.headers.get("content-type") || "";
+  const localStaticHost = ["localhost", "127.0.0.1", "::1"].includes(location.hostname) &&
+    ((health.status === 404 && !contentType.includes("application/json")) ||
+      (health.ok && contentType.includes("text/html")));
+  if (localStaticHost) {
+    DEMO_MODE = true;
+    restoreDemoSession();
+    return;
+  }
+  if (!contentType.includes("application/json")) return;
+  try {
+    const result = await apiRequest("/auth/me");
     csrfToken = result.csrfToken;
     session = { ...result.user, label: result.user.role === "hr" ? result.user.email : result.user.email };
     await loadCoreFromApi();
     sessionStorage.setItem("unre-session", JSON.stringify(session));
     showApp();
-  }).catch(() => {});
+  } catch (_) {}
 }
+initializeApp();
