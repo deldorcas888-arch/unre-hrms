@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=plainbg" />
+  <link rel="stylesheet" href="styles.css?v=campus-backdrop-20261012" />
   <link rel="icon" href="assets/unre-logo.jpg" type="image/jpeg" />
 </head>
 <body>
@@ -57,6 +57,10 @@
 
   <div id="app" class="app hidden">
     <header class="topbar">
+      <button class="nav-toggle" id="nav-toggle" type="button" aria-expanded="false" aria-controls="nav" aria-label="Open navigation menu">
+        <span class="nav-toggle-icon" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span>Menu</span>
+      </button>
       <div class="topbar-context">
         <span class="topbar-eyebrow">UNRE · HUMAN RESOURCES</span>
         <div class="acting">
@@ -65,7 +69,10 @@
         </div>
       </div>
       <div class="topbar-actions">
-        <button class="notification-trigger hidden" id="file-notifications" type="button" aria-label="View notifications"></button>
+        <div class="notification-wrap">
+          <button class="notification-trigger hidden" id="file-notifications" type="button" aria-label="View notifications" aria-haspopup="true" aria-expanded="false" aria-controls="notification-menu"></button>
+          <section class="notification-menu hidden" id="notification-menu" aria-label="Unread notifications" tabindex="-1"></section>
+        </div>
         <span class="topbar-campus">Vudal campus · Papua New Guinea</span>
         <button class="exit" id="logout" type="button">Sign out <span aria-hidden="true">→</span></button>
       </div>
@@ -79,7 +86,7 @@
             <span id="side-sub">Natural Resources &amp; Environment</span>
           </div>
         </div>
-        <nav class="nav" id="nav"></nav>
+        <nav class="nav" id="nav" aria-label="Main navigation"></nav>
         <div class="side-foot">© 2026 UNRE · Papua New Guinea</div>
       </aside>
       <main class="main" id="view"></main>

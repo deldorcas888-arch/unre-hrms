@@ -11,6 +11,7 @@ const ICONS = {
   me: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="3.2"/><path d="M5 20c1-3.5 3.8-5.2 7-5.2S18 16.5 19 20"/></svg>',
   file: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M7 3h7l5 5v13a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M14 3v6h6"/></svg>'
   ,attendance: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h3M8 16h3"/><path d="m14 15 2 2 4-5"/></svg>'
+  ,contracts: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M7 3h7l5 5v13H5V5a2 2 0 0 1 2-2z"/><path d="M14 3v6h6M8 13h8M8 17h6"/></svg>'
 };
 
 const NAV_HR = [
@@ -23,8 +24,15 @@ const NAV_HR = [
   { id: "attendance", label: "Attendance", icon: "attendance", section: "Time & attendance" },
   { id: "roster", label: "Roster & OT", icon: "jobs", section: "Time & attendance" },
   { id: "jobs", label: "Recruitment", icon: "jobs", section: "Talent & pay" },
+  { id: "contracts", label: "Contracts", icon: "contracts", section: "Talent & pay" },
   { id: "loans", label: "Loan Approvals", icon: "loans", section: "Talent & pay" },
-  { id: "payroll", label: "Payroll", icon: "pay", section: "Talent & pay" }
+  { id: "payroll", label: "Payroll", icon: "pay", section: "Talent & pay" },
+  { id: "reports", label: "Reports", icon: "analytics", section: "Governance" },
+  { id: "roles-audit", label: "Roles & audit", icon: "tasks", section: "Governance" }
+];
+
+const NAV_LEADERS = [
+  { id: "reports", label: "Reports", icon: "analytics", section: "Governance" }
 ];
 
 const NAV_STAFF = [
@@ -126,6 +134,11 @@ const SEED = {
     { id: "t2", title: "Update laboratory safety files", description: "Collect the current safety certificates for Biology laboratory staff.", employeeId: "e11", status: "New", priority: "Normal", startDate: "2026-09-25", dueDate: "2026-10-05" },
     { id: "t3", title: "Review annual leave balances", description: "Check approved leave records against the current staff register.", employeeId: "e10", status: "Pending", priority: "Normal", startDate: "2026-09-14", dueDate: "2026-09-25" },
     { id: "t4", title: "Submit field research progress summary", description: "Prepare a concise update for the Computer Science applied research meeting.", employeeId: "e12", status: "Done", priority: "Low", startDate: "2026-09-10", dueDate: "2026-09-20" }
+  ],
+  contracts: [
+    { id: "c1", employeeId: "e1", employee: "Dr. Sarah Chen", department: "Computer Science", type: "Academic appointment", start: "2025-01-01", end: "2026-12-31", status: "Renewing", workPermitNumber: "", workPermitExpiry: "", visaType: "", visaExpiry: "", documentId: "", notes: "Renewal review in progress." },
+    { id: "c2", employeeId: "e9", employee: "Emily Rodriguez", department: "Biology", type: "Visiting lecturer", start: "2026-01-01", end: "2026-12-31", status: "Active", workPermitNumber: "WP-DEMO-104", workPermitExpiry: "2026-11-15", visaType: "Work visa", visaExpiry: "2026-11-15", documentId: "", notes: "Demo record; verify original documents." },
+    { id: "c3", employeeId: "e12", employee: "Grace Tovue", department: "Computer Science", type: "Research fellowship", start: "2026-02-01", end: "2027-01-31", status: "Active", workPermitNumber: "", workPermitExpiry: "", visaType: "", visaExpiry: "", documentId: "", notes: "" }
   ]
 };
 
@@ -151,9 +164,11 @@ let viewMode = {
   payrollQuery: "", payrollRange: "Monthly", payrollSummaryYear: todayIso().slice(0, 4),
   payrollCompanyYear: todayIso().slice(0, 4), recruitQuery: "", recruitStatus: "All",
   recruitJob: "All", recruitPage: 1, dashboardYear: todayIso().slice(0, 4),
-  analyticsYear: todayIso().slice(0, 4), analyticsRows: []
+  analyticsYear: todayIso().slice(0, 4), analyticsRows: [], reportYear: todayIso().slice(0, 4),
+  reportRows: [], contractQuery: "", auditQuery: ""
 };
 let session = null;
+let notificationsOpen = false;
 
 const FILE_KINDS = ["Resume", "Achievement certificate", "Qualification", "ID / appointment letter", "Profile picture", "Other"];
 const FILE_MAX = 1200000;
@@ -172,6 +187,8 @@ function load() {
         const have = new Set(data.documents.map((d) => d.id));
         SEED.documents.forEach((d) => { if (!have.has(d.id)) data.documents.push(d); });
       }
+      if (!Array.isArray(data.contracts)) data.contracts = structuredClone(SEED.contracts);
+      if (!Array.isArray(data.auditLogs)) data.auditLogs = [];
 
       return data;
     }
@@ -200,7 +217,23 @@ function fromApiEmployee(row) {
   return { id: row.id, employeeNumber: row.employee_number, name: row.name, role: row.role,
     type: row.employee_type || "Staff", dept: row.department_name || "", departmentId: row.department_id,
     email: row.email, status: row.status, salary: Number(row.annual_salary || 0), phone: row.phone,
-    hiredOn: row.hired_on?.slice(0, 10) || "" };
+    hiredOn: row.hired_on?.slice(0, 10) || "", terminatedOn: row.terminated_on?.slice(0, 10) || "",
+    gender: row.gender || "", equityGroup: row.equity_group || "" };
+}
+function fromApiContract(row) {
+  return { id: row.id, employeeId: row.employee_id, employee: row.employee_name || "", department: row.department_name || "",
+    type: row.contract_type, start: row.starts_on?.slice(0, 10) || "", end: row.ends_on?.slice(0, 10) || "",
+    status: row.status, workPermitNumber: row.work_permit_number || "", workPermitExpiry: row.work_permit_expires_on?.slice(0, 10) || "",
+    visaType: row.visa_type || "", visaExpiry: row.visa_expires_on?.slice(0, 10) || "",
+    documentId: row.document_id || "", documentName: row.document_name || "", notes: row.notes || "" };
+}
+function fromApiAudit(row) {
+  return { id: row.id, actor: row.actor_email || "System", action: row.action, resource: row.resource,
+    resourceId: row.resource_id || "", metadata: row.metadata || {}, ip: row.ip || "", createdAt: row.created_at || "" };
+}
+function fromApiUser(row) {
+  return { id: row.id, email: row.email, role: row.role, active: row.active, employeeId: row.employee_id,
+    employeeName: row.employee_name || "" };
 }
 function fromApiLeave(row) {
   const employee = state.employees.find((item) => item.id === row.employee_id);
@@ -264,18 +297,29 @@ function fromApiDocument(row) {
     storageKey: row.storage_key };
 }
 function fromApiNotification(row) {
+  const title = row.title || "";
+  const loweredTitle = title.toLowerCase();
+  const targetPage = loweredTitle.includes("leave") ? "leave" :
+    loweredTitle.includes("loan") ? "loans" :
+      loweredTitle.includes("job application") ? "jobs" :
+        loweredTitle.includes("contract") ? "profile" : undefined;
   return { id: row.id, title: row.title, message: row.body, createdAt: row.created_at?.slice(0, 10) || todayIso(),
-    read: Boolean(row.read_at), recipientRole: session?.role };
+    read: Boolean(row.read_at), recipientRole: session?.role, employeeId: session?.employeeId, type: "request-status", targetPage };
 }
 async function loadCoreFromApi() {
   const requests = [
-    apiRequest("/employees"), DEMO_MODE || session?.role === "staff" ? Promise.resolve({ data: [] }) : apiRequest("/departments"),
-    apiRequest("/attendance"), apiRequest("/loans"), apiRequest("/payroll")
+    apiRequest("/employees"), DEMO_MODE || !isHr() ? Promise.resolve({ data: [] }) : apiRequest("/departments"),
+    apiRequest("/attendance"), apiRequest("/loans"), isLeader() ? Promise.resolve({ data: [] }) : apiRequest("/payroll")
   ];
   const [employees, departments, attendance, loans, payroll] = await Promise.all(requests);
   const leave = await apiRequest("/leave");
-  const [jobs, applications, documents, notifications, tasks] = await Promise.all([
-    apiRequest("/jobs"), apiRequest("/applications"), apiRequest("/documents"), apiRequest("/notifications"), apiRequest("/tasks")
+  const reportYear = viewMode.reportYear || todayIso().slice(0, 4);
+  const [jobs, applications, documents, notifications, tasks, contracts, users, auditLogs, workforceReport] = await Promise.all([
+    apiRequest("/jobs"), apiRequest("/applications"), apiRequest("/documents"), apiRequest("/notifications"), apiRequest("/tasks"),
+    isHr() ? apiRequest("/contracts") : Promise.resolve({ data: [] }),
+    isHr() ? apiRequest("/users") : Promise.resolve({ data: [] }),
+    isHr() ? apiRequest("/audit-logs?limit=100") : Promise.resolve({ data: [] }),
+    isLeader() ? apiRequest(`/reports/workforce?year=${encodeURIComponent(reportYear)}`) : Promise.resolve(null)
   ]);
   state.employees = (employees.data || []).map(fromApiEmployee);
   state.departments = (departments.data || []).map((row) => ({
@@ -291,6 +335,10 @@ async function loadCoreFromApi() {
   state.documents = (documents.data || []).map(fromApiDocument);
   state.notifications = (notifications.data || []).map(fromApiNotification);
   state.tasks = (tasks.data || []).map(fromApiTask);
+  state.contracts = (contracts.data || []).map(fromApiContract);
+  state.users = (users.data || []).map(fromApiUser);
+  state.auditLogs = (auditLogs.data || []).map(fromApiAudit);
+  if (workforceReport) state.workforceReport = workforceReport;
 }
 async function refreshCoreAfterApi() {
   if (!DEMO_MODE) { await loadCoreFromApi(); route(); }
@@ -313,6 +361,12 @@ function addNotification(notification) {
     ...notification
   });
 }
+function addDemoAudit(action, resource, resourceId, metadata = {}) {
+  state.auditLogs = state.auditLogs || [];
+  state.auditLogs.unshift({ id: uid("audit"), actor: session?.email || session?.label || "HR Administrator",
+    action, resource, resourceId: String(resourceId || ""), metadata, createdAt: new Date().toISOString() });
+  state.auditLogs = state.auditLogs.slice(0, 100);
+}
 function addFileNotification(employee, doc, action) {
   addNotification({
     type: "file-update",
@@ -327,10 +381,61 @@ function addFileNotification(employee, doc, action) {
 }
 function updateNotificationControl() {
   const button = document.getElementById("file-notifications");
-  if (!button) return;
-  const count = notificationsForSession().length;
+  const menu = document.getElementById("notification-menu");
+  if (!button || !menu) return;
+  const items = notificationsForSession();
+  const count = items.length;
   button.classList.toggle("hidden", count === 0);
+  button.setAttribute("aria-expanded", String(notificationsOpen && count > 0));
+  button.setAttribute("aria-label", `View ${count} unread notification${count === 1 ? "" : "s"}`);
   button.innerHTML = `&#128276; Notifications <span class="notification-count">${count}</span>`;
+  menu.classList.toggle("hidden", !notificationsOpen || count === 0);
+  if (!count) {
+    menu.innerHTML = "";
+    notificationsOpen = false;
+    return;
+  }
+  menu.innerHTML = `
+    <div class="notification-menu-head"><div><span class="eyebrow">UPDATES</span><h3>Notifications</h3><p>${count} unread</p></div>
+      <div class="notification-menu-actions"><button class="notification-mark-all" type="button" data-notifications-read-all>Mark all read</button>
+        <button class="notification-close" type="button" data-notifications-close aria-label="Close notifications">×</button></div></div>
+    <div class="notification-list">${items.map((item) => {
+      const description = item.message || (item.type === "file-update"
+        ? `${item.action || "Updated"} ${item.fileKind || "file"}${item.employeeName ? ` for ${item.employeeName}` : ""}`
+        : "You have an update.");
+      return `<button class="notification-item" type="button" data-notification-menu-item="${esc(item.id)}">
+        <span class="notification-item-mark" aria-hidden="true"></span><span class="notification-item-content">
+          <strong>${esc(item.title || (item.type === "file-update" ? "Personnel file updated" : "Notification"))}</strong>
+          <span>${esc(description)}</span><small>${esc(item.createdAt || "Just now")}</small>
+        </span><span class="notification-item-arrow" aria-hidden="true">›</span>
+      </button>`;
+    }).join("")}</div>`;
+}
+function positionNotificationMenu() {
+  const button = document.getElementById("file-notifications");
+  const menu = document.getElementById("notification-menu");
+  if (!button || !menu || !notificationsOpen) return;
+  const buttonRect = button.getBoundingClientRect();
+  const menuWidth = Math.min(360, window.innerWidth - 24);
+  const left = Math.max(12, Math.min(buttonRect.right - menuWidth, window.innerWidth - menuWidth - 12));
+  menu.style.top = `${Math.round(document.querySelector(".topbar").getBoundingClientRect().bottom + 8)}px`;
+  menu.style.left = `${Math.round(left)}px`;
+  menu.style.width = `${Math.round(menuWidth)}px`;
+}
+function closeNotificationMenu(returnFocus = false) {
+  notificationsOpen = false;
+  updateNotificationControl();
+  if (returnFocus) document.getElementById("file-notifications")?.focus();
+}
+async function activateNotification(item) {
+  if (!item) return;
+  closeNotificationMenu();
+  await markNotificationRead(item.id);
+  if (item.type === "file-update" && item.employeeId) {
+    openEmployeeModal(item.employeeId);
+    return;
+  }
+  if (item.targetPage) location.hash = `#/${item.targetPage}`;
 }
 async function markNotificationRead(id) {
   const item = (state.notifications || []).find((n) => n.id === id);
@@ -518,13 +623,19 @@ function jobSalaryRange(pay) {
   return { min: Math.min(...values), max: Math.max(...values) };
 }
 function isHr() { return session?.role === "hr"; }
+function isLeader() { return ["dean", "hod", "vice_chancellor"].includes(session?.role); }
 function me() {
   if (!session || session.role !== "staff") return null;
   return state.employees.find((e) => e.id === session.employeeId);
 }
-function navItems() { return isHr() ? NAV_HR : NAV_STAFF; }
+function navItems() { return isHr() ? NAV_HR : isLeader() ? NAV_LEADERS : NAV_STAFF; }
 function daysBetween(a, b) {
   return Math.round((new Date(b) - new Date(a)) / 86400000) + 1;
+}
+function validIsoDate(value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(value || ""))) return false;
+  const date = new Date(`${value}T00:00:00`);
+  return Number.isFinite(date.getTime()) && formatLocalIso(date) === value;
 }
 function leaveUsed(name, type) {
   return state.leave.filter((l) => l.employee === name && l.type === type && l.status === "Approved")
@@ -860,13 +971,15 @@ function route() {
   document.querySelectorAll("#nav a").forEach((a) => a.classList.toggle("active", a.dataset.page === page));
   const hr = {
     dashboard: renderDashboard, analytics: renderAnalytics, employees: renderEmployees, departments: renderDepartments, tasks: renderTasks,
-    leave: renderLeaveHr, jobs: renderJobsHr, loans: renderLoansHr, attendance: renderAttendance, roster: renderRoster, payroll: renderPayrollHr
+    leave: renderLeaveHr, jobs: renderJobsHr, contracts: renderContracts, loans: renderLoansHr, attendance: renderAttendance, roster: renderRoster, payroll: renderPayrollHr,
+    reports: renderReports, "roles-audit": renderRolesAudit
   };
+  const leaders = { reports: renderReports };
   const staff = {
     home: renderStaffHome, profile: renderProfile, tasks: renderTasks, leave: renderLeaveStaff, loans: renderLoansStaff,
     attendance: renderAttendanceStaff, payslip: renderPayslip, jobs: renderJobsStaff
   };
-  document.getElementById("view").innerHTML = (isHr() ? hr : staff)[page]();
+  document.getElementById("view").innerHTML = (isHr() ? hr : isLeader() ? leaders : staff)[page]();
   bindPage(page);
 }
 
@@ -878,6 +991,74 @@ function renderNav() {
     return `${heading}<a href="#/${n.id}" data-page="${n.id}">${ICONS[n.icon]}<span>${n.label}</span></a>`;
   }).join("");
 }
+
+function setNavOpen(open) {
+  const sidebar = document.querySelector(".sidebar");
+  const toggle = document.getElementById("nav-toggle");
+  if (!sidebar || !toggle) return;
+  sidebar.classList.toggle("nav-open", open);
+  document.body.classList.toggle("mobile-nav-open", open);
+  toggle.setAttribute("aria-expanded", String(open));
+  toggle.setAttribute("aria-label", open ? "Close navigation menu" : "Open navigation menu");
+}
+
+document.getElementById("nav-toggle").addEventListener("click", () => {
+  setNavOpen(document.getElementById("nav-toggle").getAttribute("aria-expanded") !== "true");
+});
+document.getElementById("nav").addEventListener("click", (event) => {
+  if (event.target.closest("a") && window.matchMedia("(max-width: 820px)").matches) {
+    setNavOpen(false);
+    document.getElementById("nav-toggle").focus();
+  }
+});
+document.addEventListener("click", (event) => {
+  const sidebar = document.querySelector(".sidebar");
+  const toggle = document.getElementById("nav-toggle");
+  if (sidebar?.classList.contains("nav-open") && !sidebar.contains(event.target) && !toggle.contains(event.target)) {
+    setNavOpen(false);
+  }
+  const notificationWrap = document.querySelector(".notification-wrap");
+  if (notificationsOpen && notificationWrap && !notificationWrap.contains(event.target)) closeNotificationMenu();
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && notificationsOpen) {
+    closeNotificationMenu(true);
+    return;
+  }
+  if (event.key === "Escape" && document.querySelector(".sidebar.nav-open")) {
+    setNavOpen(false);
+    document.getElementById("nav-toggle").focus();
+  }
+});
+window.matchMedia("(min-width: 821px)").addEventListener("change", (event) => {
+  if (event.matches) setNavOpen(false);
+});
+document.getElementById("file-notifications").addEventListener("click", () => {
+  notificationsOpen = !notificationsOpen;
+  updateNotificationControl();
+  if (notificationsOpen) {
+    positionNotificationMenu();
+    document.getElementById("notification-menu").focus();
+  }
+});
+document.getElementById("notification-menu").addEventListener("click", async (event) => {
+  if (event.target.closest("[data-notifications-close]")) {
+    closeNotificationMenu(true);
+    return;
+  }
+  if (event.target.closest("[data-notifications-read-all]")) {
+    const ids = notificationsForSession().map((item) => item.id);
+    for (const id of ids) await markNotificationRead(id);
+    closeNotificationMenu();
+    return;
+  }
+  const trigger = event.target.closest("[data-notification-menu-item]");
+  if (trigger) {
+    const item = notificationsForSession().find((notification) => notification.id === trigger.dataset.notificationMenuItem);
+    await activateNotification(item);
+  }
+});
+window.addEventListener("resize", positionNotificationMenu);
 
 function countsByType() {
   const types = ["Faculty", "Staff", "Adjunct", "Research"];
@@ -1027,6 +1208,178 @@ function renderAnalytics() {
         ${taskOwnerRows.length ? `<div class="analytics-table-wrap"><table class="plain analytics-table"><thead><tr><th>Employee</th><th>Department</th><th>Tasks</th><th>Complete</th><th>Overdue</th></tr></thead><tbody>${taskOwnerRows.map((owner) => `<tr><td><strong>${esc(owner.name)}</strong></td><td>${esc(owner.department)}</td><td>${owner.assigned}</td><td>${owner.done} (${Math.round(owner.done / owner.assigned * 100)}%)</td><td>${owner.overdue}</td></tr>`).join("")}</tbody></table></div>` : `<div class="empty">No tasks have been assigned.</div>`}
       </section>
     </div>`;
+}
+
+function contractAlertDate(contract) {
+  return [contract.end, contract.workPermitExpiry, contract.visaExpiry]
+    .filter(Boolean).sort()[0] || "";
+}
+
+function contractAlert(contract) {
+  if (contract.status === "Ended") return null;
+  const today = todayIso();
+  const dates = [
+    [contract.end, "Contract"],
+    [contract.workPermitExpiry, "Work permit"],
+    [contract.visaExpiry, "Visa"]
+  ].filter(([date]) => date);
+  const due = dates.sort(([left], [right]) => left.localeCompare(right)).find(([date]) => date <= addDaysIso(today, 90));
+  return due ? { date: due[0], label: due[1], expired: due[0] < today } : null;
+}
+
+function renderContracts() {
+  const contracts = (state.contracts || []).slice().sort((a, b) => contractAlertDate(a).localeCompare(contractAlertDate(b)));
+  const alerts = contracts.map((contract) => ({ contract, alert: contractAlert(contract) })).filter((item) => item.alert);
+  const currentContracts = contracts.filter((contract) => contract.status !== "Ended" && (!contract.end || contract.end >= todayIso()));
+  const query = (viewMode.contractQuery || "").trim().toLowerCase();
+  const matching = contracts.filter((contract) =>
+    `${contract.employee} ${contract.department} ${contract.type} ${contract.workPermitNumber} ${contract.visaType}`.toLowerCase().includes(query)
+  );
+  return `
+    <div class="page-head"><div><span class="eyebrow">PEOPLE OPERATIONS</span><h2>Contracts</h2><p>Track appointments, renewal dates, and work authorization expiries.</p></div>
+      <button class="btn btn-primary" data-open="contract">+ Add contract</button></div>
+    <div class="stats">
+      <div class="stat"><div class="k">Current contracts</div><div class="n">${currentContracts.length}</div><div class="s">Active and renewing</div></div>
+      <div class="stat"><div class="k">Renewal / expiry alerts</div><div class="n">${alerts.length}</div><div class="s">Due within 90 days or overdue</div></div>
+      <div class="stat"><div class="k">Work permits</div><div class="n">${contracts.filter((item) => item.workPermitExpiry).length}</div><div class="s">Expiry dates recorded</div></div>
+      <div class="stat"><div class="k">Visas</div><div class="n">${contracts.filter((item) => item.visaExpiry).length}</div><div class="s">Expiry dates recorded</div></div>
+    </div>
+    <section class="card contract-alerts"><div class="card-heading"><div><span class="eyebrow">UPCOMING ACTIONS</span><h3>Renewals and authorization alerts</h3></div></div>
+      ${alerts.length ? alerts.slice(0, 8).map(({ contract, alert }) => `<div class="leave-mini"><div><strong>${esc(contract.employee)} · ${esc(alert.label)}</strong><div class="meta">${esc(contract.type)} · ${esc(alert.date)}</div></div>${badge(alert.expired ? "Expired" : "Pending")}</div>`).join("") : `<div class="empty">No contract, permit, or visa expiries due in the next 90 days.</div>`}
+    </section>
+    <section class="card contract-register"><div class="card-heading"><div><span class="eyebrow">CONTRACT REGISTER</span><h3>Staff agreements</h3><p class="meta">${matching.length} record${matching.length === 1 ? "" : "s"}</p></div><button class="btn btn-ghost" data-contract-export>Export CSV</button></div>
+      <div class="toolbar"><input class="search" id="contract-search" type="search" placeholder="Search staff, contract, permit, or visa" value="${esc(query)}" /></div>
+      <div class="attendance-table-wrap"><table class="plain"><thead><tr><th>Employee</th><th>Contract</th><th>Term</th><th>Work permit</th><th>Visa</th><th>Status</th><th>Document</th><th></th></tr></thead><tbody>
+        ${matching.map((contract) => `<tr><td><strong>${esc(contract.employee)}</strong><small>${esc(contract.department)}</small></td><td>${esc(contract.type)}</td><td>${esc(contract.start)} – ${esc(contract.end || "Open-ended")}</td>
+          <td>${esc(contract.workPermitNumber || "—")}<small>${esc(contract.workPermitExpiry || "No expiry recorded")}</small></td><td>${esc(contract.visaType || "—")}<small>${esc(contract.visaExpiry || "No expiry recorded")}</small></td>
+          <td>${badge(contract.status)}${contractAlert(contract) ? `<small class="contract-alert-label">${esc(contractAlert(contract).label)} ${contractAlert(contract).expired ? "expired" : "due soon"}</small>` : ""}</td><td>${contract.documentId ? `<button class="link" data-file-view="${esc(contract.documentId)}">${esc(contract.documentName || "View file")}</button>` : "—"}</td>
+          <td><button class="btn btn-ghost" data-contract-record="${esc(contract.id)}">Edit</button></td></tr>`).join("") || `<tr><td colspan="8"><div class="empty">${query ? "No contracts match this search." : "No staff contracts on file yet."}</div></td></tr>`}
+      </tbody></table></div>
+    </section>`;
+}
+
+function reportGroups(employees, key) {
+  const groups = new Map();
+  employees.forEach((employee) => {
+    const label = String(employee[key] || "Not recorded").trim() || "Not recorded";
+    groups.set(label, (groups.get(label) || 0) + 1);
+  });
+  return [...groups].map(([label, count]) => ({ label, count })).sort((a, b) => a.label.localeCompare(b.label));
+}
+
+function workforceReport(year) {
+  if (!DEMO_MODE && state.workforceReport?.year === Number(year)) return state.workforceReport;
+  let employees = state.employees || [];
+  if (session?.role === "hod") {
+    const ownDepartment = employees.find((employee) => employee.id === session.employeeId)?.dept;
+    employees = employees.filter((employee) => employee.dept === ownDepartment);
+  }
+  const start = `${year}-01-01`;
+  const end = `${year}-12-31`;
+  const employedAt = (employee, date) => (!employee.hiredOn || employee.hiredOn <= date) && (!employee.terminatedOn || employee.terminatedOn > date);
+  const opening = employees.filter((employee) => employedAt(employee, start)).length;
+  const closing = employees.filter((employee) => employedAt(employee, end)).length;
+  const hires = employees.filter((employee) => employee.hiredOn >= start && employee.hiredOn <= end).length;
+  const departures = employees.filter((employee) => employee.terminatedOn >= start && employee.terminatedOn <= end).length;
+  const average = (opening + closing) / 2;
+  const active = employees.filter((employee) => employee.status !== "Inactive" && !employee.terminatedOn);
+  const departments = reportGroups(active.map((employee) => ({ department: employee.dept || "Unassigned" })), "department");
+  return { year: Number(year), gender: reportGroups(active, "gender"), equity: reportGroups(active, "equityGroup"), departments,
+    turnover: { opening_headcount: opening, closing_headcount: closing, hires, departures, average_headcount: average,
+      rate: average ? Number((departures / average * 100).toFixed(1)) : 0 } };
+}
+
+function renderReportGroup(title, eyebrow, items, total) {
+  return `<section class="card report-group"><div class="card-heading"><div><span class="eyebrow">${eyebrow}</span><h3>${title}</h3></div><strong>${total}</strong></div>
+    ${items.length ? items.map((item) => `<div class="report-row"><span>${esc(item.label)}</span><strong>${Number(item.count)}</strong></div>`).join("") : `<div class="empty">No records available.</div>`}</section>`;
+}
+
+function renderReports() {
+  const currentYear = Number(todayIso().slice(0, 4));
+  const candidateYears = [...new Set([...Array.from({ length: 5 }, (_, index) => String(currentYear - index)), ...(state.employees || []).flatMap((employee) => [employee.hiredOn, employee.terminatedOn])
+    .filter(Boolean).map((date) => date.slice(0, 4))])].sort((a, b) => b.localeCompare(a));
+  const selectedYear = candidateYears.includes(viewMode.reportYear) ? viewMode.reportYear : candidateYears[0];
+  viewMode.reportYear = selectedYear;
+  const report = workforceReport(selectedYear);
+  const turnover = report.turnover || {};
+  const totalHeadcount = (report.departments || []).reduce((sum, item) => sum + Number(item.count), 0);
+  const csvRows = [
+    ["Year", selectedYear, "Workforce report"],
+    ["Measure", "Category", "Count", "Period"],
+    ...[...(report.gender || []).map((item) => ["Gender", item.label, item.count, "Current headcount"]),
+      ...(report.equity || []).map((item) => ["Equity group", item.label, item.count, "Current headcount"]),
+      ...(report.departments || []).map((item) => ["Department headcount", item.label, item.count, "Current headcount"]),
+      ["Turnover", "Opening headcount", turnover.opening_headcount || 0, selectedYear],
+      ["Turnover", "Closing headcount", turnover.closing_headcount || 0, selectedYear],
+      ["Turnover", "Hires", turnover.hires || 0, selectedYear],
+      ["Turnover", "Departures", turnover.departures || 0, selectedYear],
+      ["Turnover", "Rate (%)", turnover.rate || 0, selectedYear]]
+  ];
+  viewMode.reportRows = csvRows;
+  return `
+    <div class="page-head"><div><span class="eyebrow">WORKFORCE INTELLIGENCE</span><h2>Reports</h2><p>Headcount, gender and equity representation, and annual staff movement.</p></div>
+      <div class="analytics-actions"><label class="compact-select"><span class="sr-only">Reporting year</span><select id="report-year">${candidateYears.map((year) => `<option${year === selectedYear ? " selected" : ""}>${year}</option>`).join("")}</select></label><button class="btn btn-ghost" data-report-export>DHER CSV</button></div></div>
+    <div class="stats report-stats">
+      <div class="stat"><div class="k">Current headcount</div><div class="n">${totalHeadcount}</div><div class="s">Active and on leave</div></div>
+      <div class="stat"><div class="k">Hires · ${esc(selectedYear)}</div><div class="n">${Number(turnover.hires || 0)}</div><div class="s">Start dates in reporting year</div></div>
+      <div class="stat"><div class="k">Departures · ${esc(selectedYear)}</div><div class="n">${Number(turnover.departures || 0)}</div><div class="s">Recorded termination dates</div></div>
+      <div class="stat"><div class="k">Turnover rate</div><div class="n">${Number(turnover.rate || 0)}%</div><div class="s">Departures ÷ average headcount</div></div>
+    </div>
+    <div class="report-grid">
+      ${renderReportGroup("Headcount by department", "CURRENT WORKFORCE", report.departments || [], totalHeadcount)}
+      ${renderReportGroup("Gender representation", "EQUITY", report.gender || [], (report.gender || []).reduce((sum, item) => sum + Number(item.count), 0))}
+      ${renderReportGroup("Equity groups", "EQUITY", report.equity || [], (report.equity || []).reduce((sum, item) => sum + Number(item.count), 0))}
+      <section class="card report-group"><div class="card-heading"><div><span class="eyebrow">ANNUAL MOVEMENT</span><h3>Turnover calculation</h3></div></div>
+        <div class="report-row"><span>Opening headcount</span><strong>${Number(turnover.opening_headcount || 0)}</strong></div>
+        <div class="report-row"><span>Closing headcount</span><strong>${Number(turnover.closing_headcount || 0)}</strong></div>
+        <div class="report-row"><span>Average headcount</span><strong>${Number(turnover.average_headcount || 0).toFixed(1)}</strong></div>
+        <div class="report-row"><span>Departures / average</span><strong>${Number(turnover.departures || 0)} / ${Number(turnover.average_headcount || 0).toFixed(1)}</strong></div>
+      </section>
+    </div>
+    <p class="meta report-footnote">${report.scope === "Department" || session?.role === "hod" ? "Department-scoped report." : "University-wide report."} Demographic categories not supplied in employee records are reported as “Not recorded”. Reports are aggregate; individual demographic records are not shown.</p>`;
+}
+
+const ACCESS_ROLES = ["hr", "dean", "hod", "vice_chancellor", "staff"];
+const ACCESS_ROLE_LABELS = { hr: "HR", dean: "Dean", hod: "Head of Department", vice_chancellor: "Vice-Chancellor", staff: "Staff" };
+
+function roleAuditUsers() {
+  if (!DEMO_MODE) return state.users || [];
+  return [{ id: "demo-hr", email: "hr@unre.ac.pg", role: "hr", active: true, employeeName: "HR Administrator" },
+    ...(state.employees || []).map((employee) => ({ id: employee.id, email: employee.email, role: employee.accessRole || "staff", active: true, employeeId: employee.id, employeeName: employee.name }))];
+}
+
+function roleAuditEntries() {
+  return (state.auditLogs || []).slice().sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt))).slice(0, 100);
+}
+
+function renderRolesAudit() {
+  const users = roleAuditUsers();
+  const entries = roleAuditEntries().filter((entry) => {
+    const query = (viewMode.auditQuery || "").toLowerCase();
+    return !query || `${entry.actor} ${entry.action} ${entry.resource} ${entry.resourceId} ${JSON.stringify(entry.metadata || {})}`.toLowerCase().includes(query);
+  });
+  return `
+    <div class="page-head"><div><span class="eyebrow">GOVERNANCE</span><h2>Roles &amp; audit</h2><p>Manage account access and review recent changes to HR records.</p></div></div>
+    <section class="card role-register"><div class="card-heading"><div><span class="eyebrow">ACCESS CONTROL</span><h3>User roles</h3><p class="meta">HR has full operational access. Leadership roles are limited to aggregate workforce reports.</p></div></div>
+      <div class="attendance-table-wrap"><table class="plain"><thead><tr><th>Account</th><th>Person</th><th>Role</th><th>Status</th></tr></thead><tbody>
+        ${users.map((user) => `<tr><td>${esc(user.email)}</td><td>${esc(user.employeeName || "—")}</td><td><select class="compact-select role-select" data-user-role="${esc(user.id)}" aria-label="Access role for ${esc(user.email)}"${user.id === session?.id || user.email === session?.email ? " disabled" : ""}>${ACCESS_ROLES.map((role) => `<option value="${role}"${role === user.role ? " selected" : ""}>${ACCESS_ROLE_LABELS[role]}</option>`).join("")}</select></td><td>${badge(user.active === false ? "Inactive" : "Active")}</td></tr>`).join("") || `<tr><td colspan="4"><div class="empty">No user accounts found.</div></td></tr>`}
+      </tbody></table></div>
+    </section>
+    <section class="card access-matrix"><div class="card-heading"><div><span class="eyebrow">PERMISSIONS</span><h3>Access by role</h3></div></div>
+      <div class="attendance-table-wrap"><table class="plain"><thead><tr><th>Role</th><th>Access</th><th>Scope</th></tr></thead><tbody>
+        <tr><td>HR</td><td>Manage staff records and HR workflows; manage accounts; view audit history</td><td>University</td></tr>
+        <tr><td>Dean</td><td>Read workforce and equity reports</td><td>University aggregates</td></tr>
+        <tr><td>Head of Department</td><td>Read workforce and equity reports</td><td>Linked department aggregates</td></tr>
+        <tr><td>Vice-Chancellor</td><td>Read workforce and equity reports</td><td>University aggregates</td></tr>
+        <tr><td>Staff</td><td>Self-service profile, leave, payroll, attendance, tasks, and internal jobs</td><td>Own records</td></tr>
+      </tbody></table></div>
+    </section>
+    <section class="card audit-register"><div class="card-heading"><div><span class="eyebrow">CHANGE HISTORY</span><h3>Audit log</h3><p class="meta">Most recent ${entries.length} of up to 100 loaded events</p></div></div>
+      <div class="toolbar"><input id="audit-search" class="search" type="search" placeholder="Search actor, action, resource, or details" value="${esc(viewMode.auditQuery || "")}" /></div>
+      <div class="attendance-table-wrap"><table class="plain"><thead><tr><th>When</th><th>Actor</th><th>Action</th><th>Record</th><th>Details</th></tr></thead><tbody>
+        ${entries.map((entry) => `<tr><td>${esc(entry.createdAt ? new Date(entry.createdAt).toLocaleString() : "Demo activity")}</td><td>${esc(entry.actor || "HR Administrator")}</td><td>${esc(entry.action)}</td><td>${esc(entry.resource)} ${esc(entry.resourceId)}</td><td>${esc(JSON.stringify(entry.metadata || {}))}</td></tr>`).join("") || `<tr><td colspan="5"><div class="empty">No matching audit events yet.</div></td></tr>`}
+      </tbody></table></div>
+    </section>`;
 }
 
 function renderDashboard() {
@@ -1849,6 +2202,15 @@ function openEmployeeModal(employeeId, fromDeptId) {
   const edit = canEditEmpFiles(emp);
   const backDept = fromDeptId ? `<button type="button" class="link" data-dept-back="${fromDeptId}">← Back to department</button>` : "";
   const list = fileRowsHtml(docs, { edit });
+  const reportingForm = isHr() ? `<form id="f-employee-update" class="employee-reporting-form">
+      <input type="hidden" name="employeeId" value="${esc(emp.id)}" />
+      <h4 class="modal-sub">Workforce reporting</h4>
+      <div class="form-grid"><div><label>Gender (optional)</label><input name="gender" maxlength="80" value="${esc(emp.gender || "")}" /></div>
+        <div><label>Equity group (optional)</label><input name="equityGroup" maxlength="120" value="${esc(emp.equityGroup || "")}" /></div>
+        <div><label>Employment status</label><select name="status">${["Active", "On Leave", "Inactive"].map((status) => `<option${emp.status === status ? " selected" : ""}>${status}</option>`).join("")}</select></div>
+        <div><label>Termination date</label><input name="terminatedOn" type="date" value="${esc(emp.terminatedOn || "")}" /></div></div>
+      <div class="modal-actions"><button class="btn btn-primary" type="submit">Save workforce details</button></div>
+    </form>` : "";
   showModal(`
     ${backDept}
     <div class="person-top" style="${fromDeptId ? "margin-top:10px" : ""}">
@@ -1857,6 +2219,7 @@ function openEmployeeModal(employeeId, fromDeptId) {
     </div>
     <div class="kv" style="margin-top:0"><span>${esc(emp.type)}</span><span>${esc(emp.dept)}</span>${emp.employeeNumber ? `<span>ID ${esc(emp.employeeNumber)}</span>` : ""}<span>Hired ${esc(emp.hiredOn || "date not recorded")}</span>${badge(emp.status)}</div>
     <p class="modal-copy">${esc(emp.email)}${emp.phone ? ` · ${esc(emp.phone)}` : ""} · annual ${kina(emp.salary)}</p>
+    ${reportingForm}
     <h4 class="modal-sub">Personnel files</h4>
     <p class="meta">${isHr() ? "You can view, upload, and replace personnel files. Employees can manage their own files from My profile." : "You can upload or replace your personnel files. HR can view every update."}</p>
     ${list}
@@ -2186,7 +2549,7 @@ async function applyToJob(jobId) {
   toast("Application sent to HR.");
 }
 
-function openModal(kind, attendanceEmployeeId, attendanceDate) {
+function openModal(kind, attendanceEmployeeId, attendanceDate, contractId) {
   if (kind === "payroll" && !isHr()) return;
   if (kind === "task" && !isHr()) return;
   const back = document.getElementById("modal");
@@ -2201,6 +2564,8 @@ function openModal(kind, attendanceEmployeeId, attendanceDate) {
   const staffLeave = person ? `<input type="hidden" name="employee" value="${person.id}" /><p class="meta" style="margin-bottom:12px">Filing as <strong>${person.name}</strong></p>` : `<div class="field"><label>Employee</label><select name="employee">${empOpts}</select></div>`;
   const attendanceEmployee = attendanceEmployeeId || (person ? person.id : state.employees[0]?.id);
   const attendanceRecord = attendanceFor(attendanceEmployee, attendanceDate || todayIso());
+  const contract = contractId ? (state.contracts || []).find((item) => item.id === contractId) : null;
+  const contractEmployeeId = contract?.employeeId || state.employees[0]?.id;
   const forms = {
     attendance: `<h3>Record attendance</h3><form id="f-attendance">
       <div class="field"><label>Employee</label><select name="employeeId">${state.employees.map((employee) => `<option value="${employee.id}"${employee.id === attendanceEmployee ? " selected" : ""}>${esc(employee.name)}</option>`).join("")}</select></div>
@@ -2217,10 +2582,22 @@ function openModal(kind, attendanceEmployeeId, attendanceDate) {
       <div><label>Employee ID (optional)</label><input name="employeeNumber" maxlength="80" /></div>
       <div><label>Phone (optional)</label><input name="phone" type="tel" maxlength="40" /></div>
       <div><label>Hire date (optional)</label><input name="hiredOn" type="date" /></div>
+      <div><label>Gender (optional)</label><input name="gender" maxlength="80" /></div>
+      <div><label>Equity group (optional)</label><input name="equityGroup" maxlength="120" /></div>
       <div class="span-2"><label>Annual salary (Kina)</label><input name="salary" type="number" min="1" required /></div>
       <div class="span-2"><label>Profile photo</label><input type="file" name="photo" accept="image/*" /></div>
       <p class="meta span-2">Record a hire date, employee ID, and contact details when available. In demo mode, staff can sign in with the demo password. Backend self-service accounts must be provisioned separately.</p>
       <div class="span-2 modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button class="btn btn-primary">Save</button></div></form>`,
+    contract: `<h3>${contract ? "Update staff contract" : "Add staff contract"}</h3><form id="f-contract-record">
+      ${contract ? `<input type="hidden" name="contractId" value="${esc(contract.id)}" />` : ""}
+      <div class="field"><label>Employee</label><select name="employeeId" required>${state.employees.map((employee) => `<option value="${esc(employee.id)}"${employee.id === contract?.employeeId ? " selected" : ""}>${esc(employee.name)} · ${esc(employee.dept)}</option>`).join("")}</select></div>
+      <div class="form-grid"><div><label>Contract type</label><input name="type" maxlength="120" value="${esc(contract?.type || "")}" required /></div><div><label>Status</label><select name="status">${["Active", "Renewing", "Ended"].map((status) => `<option${(contract?.status || "Active") === status ? " selected" : ""}>${status}</option>`).join("")}</select></div></div>
+      <div class="form-grid"><div><label>Start date</label><input name="start" type="date" value="${esc(contract?.start || "")}" required /></div><div><label>End date (optional)</label><input name="end" type="date" value="${esc(contract?.end || "")}" /></div></div>
+      <div class="form-grid"><div><label>Work permit number</label><input name="workPermitNumber" maxlength="120" value="${esc(contract?.workPermitNumber || "")}" /></div><div><label>Work permit expiry</label><input name="workPermitExpiry" type="date" value="${esc(contract?.workPermitExpiry || "")}" /></div></div>
+      <div class="form-grid"><div><label>Visa type</label><input name="visaType" maxlength="120" value="${esc(contract?.visaType || "")}" /></div><div><label>Visa expiry</label><input name="visaExpiry" type="date" value="${esc(contract?.visaExpiry || "")}" /></div></div>
+      <div class="field"><label>Linked personnel document</label><select name="documentId"><option value="">No document linked</option>${(state.documents || []).filter((doc) => doc.employeeId === contractEmployeeId).map((doc) => `<option value="${esc(doc.id)}"${doc.id === contract?.documentId ? " selected" : ""}>${esc(doc.name)}</option>`).join("")}</select></div>
+      <div class="field"><label>Notes</label><textarea name="notes" rows="3" maxlength="2000">${esc(contract?.notes || "")}</textarea></div>
+      <div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button class="btn btn-primary">${contract ? "Save changes" : "Add contract"}</button></div></form>`,
     task: `<h3>Assign a task</h3><form id="f-task">
       <div class="field"><label for="task-title">Task title</label><input id="task-title" name="title" maxlength="180" required /></div>
       <div class="field"><label for="task-assignee">Assign to</label><select id="task-assignee" name="employeeId" required>${state.employees.filter((employee) => employee.status !== "Inactive").map((employee) => `<option value="${employee.id}">${esc(employee.name)} · ${esc(employee.dept)}</option>`).join("")}</select></div>
@@ -2287,6 +2664,14 @@ function openModal(kind, attendanceEmployeeId, attendanceDate) {
   };
   back.innerHTML = `<div class="modal">${forms[kind]}</div>`;
   back.classList.remove("hidden");
+  if (kind === "contract") {
+    const employeeSelect = back.querySelector('#f-contract-record [name="employeeId"]');
+    const documentSelect = back.querySelector('#f-contract-record [name="documentId"]');
+    employeeSelect?.addEventListener("change", () => {
+      const docs = (state.documents || []).filter((doc) => doc.employeeId === employeeSelect.value);
+      documentSelect.innerHTML = `<option value="">No document linked</option>${docs.map((doc) => `<option value="${esc(doc.id)}">${esc(doc.name)}</option>`).join("")}`;
+    });
+  }
   if (kind === "payroll") {
     const form = document.getElementById("f-payroll");
     const refresh = () => updatePayrollPreview(form);
@@ -2354,6 +2739,81 @@ function bindPage(page) {
       link.download = `unre-hr-analytics-${viewMode.analyticsYear}.csv`;
       link.click();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
+    };
+  });
+  const reportYear = document.getElementById("report-year");
+  if (reportYear) reportYear.onchange = async () => {
+    viewMode.reportYear = reportYear.value;
+    if (!DEMO_MODE) {
+      try { state.workforceReport = await apiRequest(`/reports/workforce?year=${encodeURIComponent(reportYear.value)}`); }
+      catch (error) { toast(error.message); return; }
+    }
+    route();
+  };
+  document.querySelectorAll("[data-report-export]").forEach((button) => {
+    button.onclick = () => {
+      const csv = viewMode.reportRows.map((row) => row.map((value) => `"${String(value ?? "").replace(/"/g, '""')}"`).join(",")).join("\r\n");
+      const url = URL.createObjectURL(new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" }));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `unre-dher-workforce-${viewMode.reportYear}.csv`;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    };
+  });
+  const contractSearch = document.getElementById("contract-search");
+  if (contractSearch) contractSearch.oninput = () => {
+    viewMode.contractQuery = contractSearch.value;
+    route();
+    const next = document.getElementById("contract-search");
+    if (next) { next.focus(); next.setSelectionRange(next.value.length, next.value.length); }
+  };
+  document.querySelectorAll("[data-contract-export]").forEach((button) => {
+    button.onclick = () => {
+      const query = (viewMode.contractQuery || "").toLowerCase();
+      const rows = (state.contracts || []).filter((contract) => `${contract.employee} ${contract.department} ${contract.type} ${contract.workPermitNumber} ${contract.visaType}`.toLowerCase().includes(query));
+      if (!rows.length) { toast("There are no contract records to export."); return; }
+      const columns = [["Employee", "employee"], ["Department", "department"], ["Contract type", "type"], ["Start", "start"], ["End", "end"], ["Status", "status"], ["Work permit number", "workPermitNumber"], ["Work permit expiry", "workPermitExpiry"], ["Visa type", "visaType"], ["Visa expiry", "visaExpiry"], ["Notes", "notes"]];
+      const csv = [columns.map(([label]) => label), ...rows.map((contract) => columns.map(([, key]) => contract[key] || ""))]
+        .map((row) => row.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(",")).join("\r\n");
+      const url = URL.createObjectURL(new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" }));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `unre-contracts-${todayIso()}.csv`;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    };
+  });
+  document.querySelectorAll("[data-contract-record]").forEach((button) => {
+    button.onclick = () => openModal("contract", null, null, button.dataset.contractRecord);
+  });
+  document.querySelectorAll("#view [data-file-view]").forEach((button) => {
+    button.onclick = () => openFileViewer(button.dataset.fileView);
+  });
+  const auditSearch = document.getElementById("audit-search");
+  if (auditSearch) auditSearch.oninput = () => {
+    viewMode.auditQuery = auditSearch.value;
+    route();
+    const next = document.getElementById("audit-search");
+    if (next) { next.focus(); next.setSelectionRange(next.value.length, next.value.length); }
+  };
+  document.querySelectorAll("[data-user-role]").forEach((select) => {
+    select.onchange = async () => {
+      const nextRole = select.value;
+      if (!ACCESS_ROLES.includes(nextRole)) { route(); return; }
+      if (DEMO_MODE) {
+        const employee = state.employees.find((item) => item.id === select.dataset.userRole);
+        if (employee) employee.accessRole = nextRole;
+      } else {
+        try {
+          await apiRequest(`/users/${encodeURIComponent(select.dataset.userRole)}/role`, { method: "PATCH", body: JSON.stringify({ role: nextRole }) });
+          await loadCoreFromApi();
+        } catch (error) { toast(error.message); route(); return; }
+      }
+      if (DEMO_MODE) addDemoAudit("update", "user-role", select.dataset.userRole, { role: nextRole });
+      save();
+      toast("Access role updated. The user’s next sign-in will use the new permissions.");
+      route();
     };
   });
   const dashboardPayrollYear = document.getElementById("dashboard-payroll-year");
@@ -2429,13 +2889,14 @@ function bindPage(page) {
       } else {
         record.status = nextStatus;
       }
+      if (DEMO_MODE) addDemoAudit("update", "payroll", record.id, { status: nextStatus, employee: record.employee });
       save();
       toast(`Payroll ${nextStatus.toLowerCase()} for ${record.employee}.`);
       route();
     };
   });
   document.querySelectorAll("[data-open]").forEach((b) => {
-    b.onclick = () => openModal(b.dataset.open, b.dataset.attendanceEmployee, b.dataset.attendanceDate);
+    b.onclick = () => openModal(b.dataset.open, b.dataset.attendanceEmployee, b.dataset.attendanceDate, b.dataset.contractId);
   });
   document.querySelectorAll("#view [data-app]").forEach((button) => {
     button.onclick = (event) => {
@@ -2764,6 +3225,7 @@ function bindPage(page) {
         targetPage: "leave"
       });
     }
+    if (DEMO_MODE) addDemoAudit("update", "leave", item.id, { status, employee: item.employee });
     reconcileHrRecords();
     save(); toast(`Leave ${status.toLowerCase()} for ${item.employee}.`); route();
   }; });
@@ -2988,6 +3450,13 @@ document.getElementById("modal").addEventListener("submit", async (e) => {
     app.contractSalary = salary;
     app.contractSignedAt = todayIso();
     app.status = "Contract signed";
+    if (DEMO_MODE) {
+      const contract = { id: uid("c"), employeeId: emp.id, employee: emp.name, department: job.dept,
+        type: `${job.band || "Staff"} · ${job.title}`, start: todayIso(), end: "", status: "Active",
+        workPermitNumber: "", workPermitExpiry: "", visaType: "", visaExpiry: "", documentId: "", notes: `Created from signed recruitment offer ${app.id}.` };
+      state.contracts.unshift(contract);
+      addDemoAudit("create", "contract", contract.id, { employee: emp.name, type: contract.type });
+    }
     addNotification({
       type: "request-status",
       employeeId: emp.id,
@@ -3060,10 +3529,81 @@ document.getElementById("modal").addEventListener("submit", async (e) => {
     viewMode.payrollSummaryYear = period.slice(0, 4);
     viewMode.payrollCompanyYear = period.slice(0, 4);
     viewMode.payrollQuery = "";
+    if (DEMO_MODE) addDemoAudit("create", "payroll", record.id, { employee: employee.name, period, status: record.status });
     toast(`Payroll generated for ${employee.name}. It is pending HR review.`);
     save();
     closeModal();
     route();
+    return;
+  }
+  if (form.id === "f-employee-update") {
+    if (!isHr()) return;
+    const employee = state.employees.find((item) => item.id === data.employeeId);
+    const terminatedOn = data.terminatedOn || "";
+    if (!employee || !["Active", "Inactive"].includes(data.status) ||
+      (data.status === "Inactive" && !terminatedOn) ||
+      (terminatedOn && !validIsoDate(terminatedOn))) {
+      toast("Enter valid workforce details.");
+      return;
+    }
+    const update = { gender: data.gender.trim(), equityGroup: data.equityGroup.trim(), status: data.status, terminatedOn };
+    if (!DEMO_MODE) {
+      try {
+        await apiRequest(`/employees/${encodeURIComponent(employee.id)}`, { method: "PATCH", body: JSON.stringify({
+          gender: update.gender || null, equity_group: update.equityGroup || null, status: update.status, terminated_on: update.terminatedOn || null
+        }) });
+        await loadCoreFromApi();
+      } catch (error) { toast(error.message); return; }
+    } else {
+      Object.assign(employee, update);
+    }
+    if (DEMO_MODE) addDemoAudit("update", "employee-reporting", employee.id, { fields: ["gender", "equityGroup", "status", "terminatedOn"] });
+    save();
+    route();
+    openEmployeeModal(employee.id);
+    toast("Workforce details saved.");
+    return;
+  }
+  if (form.id === "f-contract-record") {
+    if (!isHr()) return;
+    const existing = data.contractId ? (state.contracts || []).find((item) => item.id === data.contractId) : null;
+    const employee = state.employees.find((item) => item.id === data.employeeId);
+    const linkedDocument = data.documentId ? (state.documents || []).find((item) => item.id === data.documentId) : null;
+    if (!employee || !data.type.trim() || !validIsoDate(data.start) ||
+      (data.end && (!validIsoDate(data.end) || data.end < data.start)) ||
+      (data.workPermitExpiry && !validIsoDate(data.workPermitExpiry)) ||
+      (data.visaExpiry && !validIsoDate(data.visaExpiry)) ||
+        !["Active", "Renewing", "Ended"].includes(data.status) || (linkedDocument && linkedDocument.employeeId !== employee.id)) {
+      toast("Check the employee, dates, status, and linked document.");
+      return;
+    }
+    const contract = { id: existing?.id || uid("c"), employeeId: employee.id, employee: employee.name, department: employee.dept,
+      type: data.type.trim(), start: data.start, end: data.end, status: data.status,
+      workPermitNumber: data.workPermitNumber.trim(), workPermitExpiry: data.workPermitExpiry,
+      visaType: data.visaType.trim(), visaExpiry: data.visaExpiry, documentId: data.documentId,
+      documentName: linkedDocument?.name || "", notes: data.notes.trim() };
+    const body = { employee_id: contract.employeeId, contract_type: contract.type, starts_on: contract.start, ends_on: contract.end || null,
+      status: contract.status, work_permit_number: contract.workPermitNumber || null, work_permit_expires_on: contract.workPermitExpiry || null,
+      visa_type: contract.visaType || null, visa_expires_on: contract.visaExpiry || null, document_id: contract.documentId || null, notes: contract.notes || null };
+    if (!DEMO_MODE) {
+      try {
+        const result = await apiRequest(existing ? `/contracts/${encodeURIComponent(existing.id)}` : "/contracts", {
+          method: existing ? "PATCH" : "POST", body: JSON.stringify(body)
+        });
+        if (existing) Object.assign(existing, fromApiContract({ ...result, employee_name: employee.name, department_name: employee.dept, document_name: linkedDocument?.name }));
+        else state.contracts.unshift(contract);
+        await loadCoreFromApi();
+      } catch (error) { toast(error.message); return; }
+    } else if (existing) {
+      Object.assign(existing, contract);
+    } else {
+      state.contracts.unshift(contract);
+    }
+    if (DEMO_MODE) addDemoAudit(existing ? "update" : "create", "contract", contract.id, { employee: employee.name, type: contract.type, status: contract.status });
+    save();
+    closeModal();
+    route();
+    toast(existing ? "Contract updated." : "Contract added to the register.");
     return;
   }
   if (form.id === "f-doc") {
@@ -3079,14 +3619,15 @@ document.getElementById("modal").addEventListener("submit", async (e) => {
     const employee = {
       id: uid("e"), employeeNumber: data.employeeNumber.trim(), name: data.name.trim(), role: data.role.trim(),
       type: data.type, dept: data.dept, email: data.email.trim().toLowerCase(), phone: data.phone.trim(),
-      hiredOn: data.hiredOn, status: "Active", salary: Number(data.salary), password: DEMO_PASS
+      hiredOn: data.hiredOn, gender: data.gender.trim(), equityGroup: data.equityGroup.trim(), status: "Active", salary: Number(data.salary), password: DEMO_PASS
     };
     if (!DEMO_MODE) {
       try {
         const saved = await apiRequest("/employees", { method: "POST", body: JSON.stringify({
           employee_number: employee.employeeNumber || null, name: employee.name, role: employee.role,
           employee_type: employee.type, department_id: department?.id || null, email: employee.email,
-          phone: employee.phone || null, hired_on: employee.hiredOn || null, status: "Active",
+          phone: employee.phone || null, hired_on: employee.hiredOn || null, gender: employee.gender || null,
+          equity_group: employee.equityGroup || null, status: "Active",
           annual_salary: employee.salary
         }) });
         await loadCoreFromApi();
@@ -3124,6 +3665,7 @@ document.getElementById("modal").addEventListener("submit", async (e) => {
       if (department) department.members += 1;
     }
     toast("Employee added. They can use staff self-service.");
+    if (DEMO_MODE) addDemoAudit("create", "employee", employee.id, { employee: employee.name });
   }
   if (form.id === "f-task") {
     if (!isHr()) return;
@@ -3181,6 +3723,7 @@ document.getElementById("modal").addEventListener("submit", async (e) => {
       targetPage: "leave"
     });
     toast("Leave submitted to HR.");
+    if (DEMO_MODE) addDemoAudit("create", "leave", request.id, { employee: emp.name, type: request.type });
   }
   if (form.id === "f-job") {
     if (!isHr()) return;
@@ -3361,19 +3904,16 @@ function showApp() {
   viewMode.taskDept = "All";
   document.body.classList.toggle("role-staff", session.role === "staff");
   document.body.classList.toggle("role-hr", session.role === "hr");
-  document.getElementById("acting-label").textContent = session.role === "hr" ? "HR office · signed in as" : "Staff self-service · signed in as";
+  document.getElementById("acting-label").textContent = session.role === "hr" ? "HR office · signed in as" : isLeader() ? `${ACCESS_ROLE_LABELS[session.role]} · reports access` : "Staff self-service · signed in as";
   document.getElementById("actor-pill").textContent = session.label;
   updateNotificationControl();
-  document.getElementById("side-title").textContent = session.role === "hr" ? "UNRE HR" : "UNRE Staff";
-  document.getElementById("side-sub").textContent = session.role === "hr" ? "Natural Resources & Environment" : "Self-service portal";
-  location.hash = session.role === "hr" ? "#/dashboard" : "#/home";
+  document.getElementById("side-title").textContent = session.role === "hr" ? "UNRE HR" : isLeader() ? "UNRE Leadership" : "UNRE Staff";
+  document.getElementById("side-sub").textContent = session.role === "hr" ? "Natural Resources & Environment" : isLeader() ? "Workforce reports" : "Self-service portal";
+  location.hash = session.role === "hr" ? "#/dashboard" : isLeader() ? "#/reports" : "#/home";
   renderNav();
   route();
 }
 
-document.getElementById("file-notifications").addEventListener("click", () => {
-  location.hash = "#/dashboard";
-});
 window.addEventListener("storage", (e) => {
   if (e.key !== KEY || !e.newValue) return;
   try {
@@ -3413,8 +3953,9 @@ document.getElementById("login-form").addEventListener("submit", async (e) => {
   } else {
     const emp = state.employees.find((x) => x.email === email);
     if (!emp || password !== (emp.password || DEMO_PASS)) { toast("Invalid username or password."); return; }
-    session = { role: "staff", employeeId: emp.id, email: emp.email, label: emp.name };
+    session = { role: emp.accessRole || "staff", employeeId: emp.id, email: emp.email, label: emp.name };
   }
+  if (DEMO_MODE) addDemoAudit("login", "user", session.email, { role: session.role });
   sessionStorage.setItem("unre-session", JSON.stringify(session));
   showApp();
 });
@@ -3431,7 +3972,10 @@ document.getElementById("logout").addEventListener("click", async () => {
   location.hash = "";
 });
 
-window.addEventListener("hashchange", route);
+window.addEventListener("hashchange", () => {
+  if (window.matchMedia("(max-width: 820px)").matches) setNavOpen(false);
+  route();
+});
 function restoreDemoSession() {
   try {
     const saved = JSON.parse(sessionStorage.getItem("unre-session") || "null");

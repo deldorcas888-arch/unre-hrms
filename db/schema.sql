@@ -9,8 +9,12 @@ CREATE TABLE IF NOT EXISTS employees (
   email text NOT NULL UNIQUE, role text NOT NULL, employee_type text, department_id uuid REFERENCES departments(id) ON DELETE SET NULL,
   status text NOT NULL DEFAULT 'Active' CHECK (status IN ('Active','On Leave','Inactive')),
   annual_salary numeric(12,2) NOT NULL DEFAULT 0 CHECK (annual_salary >= 0), phone text, hired_on date,
+  gender text, equity_group text, terminated_on date,
   created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now()
 );
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS gender text;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS equity_group text;
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS terminated_on date;
 DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'departments_head_fk') THEN
     ALTER TABLE departments ADD CONSTRAINT departments_head_fk FOREIGN KEY (head_employee_id) REFERENCES employees(id) ON DELETE SET NULL;
@@ -18,9 +22,11 @@ DO $$ BEGIN
 END $$;
 CREATE TABLE IF NOT EXISTS users (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(), email text NOT NULL UNIQUE, password_hash text NOT NULL,
-  role text NOT NULL CHECK (role IN ('hr','staff')), employee_id uuid UNIQUE REFERENCES employees(id) ON DELETE SET NULL,
+  role text NOT NULL CHECK (role IN ('hr','dean','hod','vice_chancellor','staff')), employee_id uuid UNIQUE REFERENCES employees(id) ON DELETE SET NULL,
   active boolean NOT NULL DEFAULT true, created_at timestamptz NOT NULL DEFAULT now()
 );
+ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
+ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('hr','dean','hod','vice_chancellor','staff'));
 CREATE TABLE IF NOT EXISTS leave_requests (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(), employee_id uuid NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
   leave_type text NOT NULL, starts_on date NOT NULL, ends_on date NOT NULL, note text,
@@ -102,6 +108,17 @@ CREATE TABLE IF NOT EXISTS documents (
   application_id uuid REFERENCES applications(id) ON DELETE CASCADE, kind text NOT NULL, filename text NOT NULL,
   content_type text, size_bytes integer, storage_key text, created_by uuid REFERENCES users(id) ON DELETE SET NULL, created_at timestamptz NOT NULL DEFAULT now()
 );
+CREATE TABLE IF NOT EXISTS contracts (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(), employee_id uuid NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+  contract_type text NOT NULL, starts_on date NOT NULL, ends_on date,
+  status text NOT NULL DEFAULT 'Active' CHECK (status IN ('Active','Renewing','Ended')),
+  work_permit_number text, work_permit_expires_on date, visa_type text, visa_expires_on date,
+  document_id uuid REFERENCES documents(id) ON DELETE SET NULL, notes text,
+  created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(),
+  CHECK (ends_on IS NULL OR ends_on >= starts_on)
+);
+CREATE INDEX IF NOT EXISTS contracts_employee_end_idx ON contracts(employee_id,ends_on);
+CREATE INDEX IF NOT EXISTS contracts_permit_expiry_idx ON contracts(work_permit_expires_on,visa_expires_on);
 CREATE TABLE IF NOT EXISTS notifications (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(), user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   title text NOT NULL, body text NOT NULL, read_at timestamptz, created_at timestamptz NOT NULL DEFAULT now()

@@ -23,6 +23,15 @@ University HR for the **Papua New Guinea University of Natural Resources and Env
   allowances, bonus, and other deductions; save entries as Pending, then
   complete or reject them, search and filter by pay period, and export a CSV
   register
+- Contracts: maintain staff agreements, renewal status, permit and visa dates,
+  expiry alerts, and links to personnel documents; signed recruitment offers
+  create contract records automatically
+- Reports: export headcount by department, gender and equity representation,
+  hires, departures, and annual turnover measures as a Department of Higher
+  Education CSV
+- Roles & audit: assign HR, Dean, Head of Department, Vice-Chancellor, or Staff
+  access to existing accounts and review recent changes; HoD reports are scoped
+  to the linked employee's department
 
 **Staff self-service** (sign in with your UNRE work email username and password; demo password: `unre2026`)
 
@@ -36,6 +45,10 @@ University HR for the **Papua New Guinea University of Natural Resources and Env
 - View personal attendance history
 - Review personal monthly attendance summaries and filter attendance history by month
 - HR can sign an accepted internal applicant's contract with an agreed annual salary; the employee's role, appointment, department, and payslip update after signing.
+
+Optional gender and equity-group fields are HR-maintained from an employee
+record; workforce reports expose aggregate counts only. User accounts must be
+provisioned separately, and role changes take effect at the next sign-in.
 
 Approved loans deduct from the monthly payslip. Policy: one outstanding loan, maximum 40% of annual salary. Payroll is created per employee and month as Pending; HR can complete or reject each entry. Completed payroll is shown in staff self-service, with period totals and a downloadable payroll register for HR.
 

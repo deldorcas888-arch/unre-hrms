@@ -14,6 +14,9 @@ For an existing database, apply `db/schema.sql` (or
 window. This idempotent schema adds payroll processing fields and recruitment
 fields, including vacancy details, candidate stages, and interview scheduling,
 as well as the employee task-management table.
+For databases already on migration 001, apply
+`psql "$DATABASE_URL" -f db/migrations/002_contracts_roles_reports.sql` to add
+contract records, optional workforce reporting fields, and leadership roles.
 Back up PostgreSQL before migrations.
 
 ## Production
