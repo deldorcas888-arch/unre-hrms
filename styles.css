@@ -724,8 +724,6 @@ body.mobile-nav-open .nav-toggle-icon i:last-child { transform: translateY(-6px)
 .recruitment-table td:first-child { min-width: 190px; }
 .recruitment-table td:nth-child(2) { min-width: 180px; }
 .recruitment-table .meta { font-size: 11px; margin-top: 3px; }
-.candidate-row { cursor: pointer; }
-.candidate-row:hover { background: #f8f9fc; }
 .recruitment-pagination { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 14px; }
 .recruitment-pagination > div { display: flex; align-items: center; gap: 10px; font-size: 11px; }
 .recruitment-pagination .btn { padding: 7px 10px; font-size: 11px; }

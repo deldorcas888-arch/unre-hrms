@@ -1954,7 +1954,7 @@ function renderJobsHr() {
         ${pageApps.map((app) => {
           const job = state.jobs.find((item) => item.id === app.jobId);
           const interview = app.interviewAt ? new Date(app.interviewAt).toLocaleString("en", { dateStyle: "medium", timeStyle: "short" }) : "Not scheduled";
-          return `<tr data-app="${app.id}" class="candidate-row">
+          return `<tr>
             <td><strong>${esc(app.employee)}</strong><div class="meta">${esc(app.email || (app.employeeId ? "Internal staff" : "External applicant"))}</div></td>
             <td>${esc(job?.title || "Removed posting")}<div class="meta">${esc(job?.dept || "")}</div></td>
             <td>${esc(app.at)}</td><td>${badge(app.status)}</td><td>${esc(interview)}</td>
@@ -2618,7 +2618,6 @@ function openAppModal(id) {
       <button class="btn btn-ghost" type="submit">Save schedule</button>
     </form>
     <div class="modal-actions">
-      <button type="button" class="btn btn-ghost" data-job-back="${j.id}">Back</button>
       ${stageActions.map(([status, label, cls]) => `<button type="button" class="btn ${cls}" data-app-act="${status}" data-app-id="${app.id}">${label}</button>`).join("")}
       ${app.status === "Accepted" && app.employeeId && !contractSigned ? `<button type="button" class="btn btn-brand" data-contract="${app.id}">Sign contract</button>` : ""}
     </div>
@@ -2679,7 +2678,7 @@ async function applyToJob(jobId) {
     } catch (error) { toast(error.message); return; }
   }
   state.applications.push(application);
-  addNotification({
+  if (DEMO_MODE) addNotification({
     type: "request-submitted",
     recipientRole: "hr",
     title: "New job application",
@@ -3154,7 +3153,7 @@ function bindPage(page) {
   document.querySelectorAll("[data-job]").forEach((b) => {
     const open = () => openJobModal(b.dataset.job);
     b.onclick = (e) => { if (e.target.closest("button")) return; open(); };
-    b.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } };
+    b.onkeydown = (e) => { if (e.target.closest("button")) return; if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } };
   });
   document.querySelectorAll("#view [data-emp]").forEach((b) => {
     const open = () => openEmployeeModal(b.dataset.emp, b.dataset.fromDept);
@@ -3520,7 +3519,7 @@ document.getElementById("modal").addEventListener("click", async (e) => {
       } catch (error) { toast(error.message); return; }
     }
     app.status = nextStatus;
-    if (app.employeeId) {
+    if (DEMO_MODE && app.employeeId) {
       addNotification({
         type: "request-status",
         employeeId: app.employeeId,
@@ -3660,7 +3659,7 @@ document.getElementById("modal").addEventListener("submit", async (e) => {
       state.contracts.unshift(contract);
       addDemoAudit("create", "contract", contract.id, { employee: emp.name, type: contract.type });
     }
-    addNotification({
+    if (DEMO_MODE) addNotification({
       type: "request-status",
       employeeId: emp.id,
       title: "Employment contract signed",

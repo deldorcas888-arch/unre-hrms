@@ -52,6 +52,19 @@ async function audit(req, action, resource, resourceId, metadata = {}) {
   if (!req.session.user) return;
   await pool.query("INSERT INTO audit_logs(actor_id,action,resource,resource_id,metadata,ip) VALUES($1,$2,$3,$4,$5,$6)", [req.session.user.id, action, resource, resourceId || null, metadata, req.ip]);
 }
+async function notifyEmployee(db, employeeId, title, body) {
+  if (!employeeId) return;
+  await db.query(
+    "INSERT INTO notifications(user_id,title,body) SELECT id,$2,$3 FROM users WHERE employee_id=$1 AND active=true",
+    [employeeId, title, body]
+  );
+}
+async function notifyHr(db, title, body) {
+  await db.query(
+    "INSERT INTO notifications(user_id,title,body) SELECT id,$1,$2 FROM users WHERE role='hr' AND active=true",
+    [title, body]
+  );
+}
 async function auth(req, res, next) {
   if (!req.session.user) return next(fail(401, "Authentication required"));
   try {
@@ -694,6 +707,24 @@ for (const [name, spec] of Object.entries(resources)) {
     });
     if (spec.owner && req.session.user.role !== "hr") { const i = keys.indexOf("employee_id"); if (i >= 0) values[i] = req.session.user.employeeId; else { keys.push("employee_id"); values.push(req.session.user.employeeId); } }
     const placeholders = keys.map((_, i) => `$${i + 1}`).join(",");
+    if (name === "applications" && req.session.user.role !== "hr") {
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        const result = await client.query(`INSERT INTO ${spec.table}(${keys.join(",")}) VALUES(${placeholders}) RETURNING *`, values);
+        const job = await client.query("SELECT title FROM jobs WHERE id=$1", [result.rows[0].job_id]);
+        await notifyHr(client, "New job application", `${result.rows[0].applicant_name} applied for ${job.rows[0]?.title || "an internal job"}.`);
+        await client.query("INSERT INTO audit_logs(actor_id,action,resource,resource_id,metadata,ip) VALUES($1,'create',$2,$3,$4,$5)",
+          [req.session.user.id, name, result.rows[0].id, { fields: keys }, req.ip]);
+        await client.query("COMMIT");
+        res.status(201).json(result.rows[0]);
+      } catch (error) {
+        await client.query("ROLLBACK").catch(() => {});
+        if (error.code === "23505") throw fail(409, "You have already applied for this job");
+        throw error;
+      } finally { client.release(); }
+      return;
+    }
     const result = await pool.query(`INSERT INTO ${spec.table}(${keys.join(",")}) VALUES(${placeholders}) RETURNING *`, values);
     await audit(req, "create", name, result.rows[0].id, { fields: keys }); res.status(201).json(result.rows[0]);
   }));
@@ -745,6 +776,7 @@ for (const [name, spec] of Object.entries(resources)) {
     }
     let statusGuard = "";
     let expectedStatus;
+    let applicationNotification;
     if (name === "tasks") {
       const user = req.session.user;
       if (req.body.status !== undefined && !["New", "In Progress", "Pending", "Done"].includes(req.body.status)) {
@@ -768,7 +800,10 @@ for (const [name, spec] of Object.entries(resources)) {
     }
     if (name === "applications" && req.body.status !== undefined) {
       if (req.body.status === "Contract signed") throw fail(400, "Sign the employment contract to complete hiring");
-      const current = await pool.query("SELECT status FROM applications WHERE id=$1", [req.params.id]);
+      const current = await pool.query(
+        "SELECT a.status,a.employee_id,j.title AS job_title FROM applications a JOIN jobs j ON j.id=a.job_id WHERE a.id=$1",
+        [req.params.id]
+      );
       if (!current.rows[0]) throw fail(404, "Application not found");
       const transitions = {
         Pending: ["Shortlisted", "Declined"],
@@ -779,6 +814,11 @@ for (const [name, spec] of Object.entries(resources)) {
       if (!transitions[previousStatus]?.includes(req.body.status)) {
         throw fail(409, "Application cannot move from its current stage to that status");
       }
+      applicationNotification = {
+        employeeId: current.rows[0].employee_id,
+        title: `Job application ${req.body.status.toLowerCase()}`,
+        body: `Your application for ${current.rows[0].job_title} was ${req.body.status.toLowerCase()}.`
+      };
       expectedStatus = previousStatus;
     }
     if (name === "jobs" && (req.body.status !== undefined || req.body.closes_on !== undefined)) {
@@ -847,6 +887,23 @@ for (const [name, spec] of Object.entries(resources)) {
             [req.session.user.id, user.id, { active: false, reason: "employee-inactive" }, req.ip]
           );
         }
+        await client.query("COMMIT");
+        res.json(result.rows[0]);
+      } catch (error) {
+        await client.query("ROLLBACK").catch(() => {});
+        throw error;
+      } finally { client.release(); }
+      return;
+    }
+    if (name === "applications" && applicationNotification) {
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        const result = await client.query(updateSql, params);
+        if (!result.rows[0]) throw fail(409, "Application stage changed; reload and try again");
+        await notifyEmployee(client, applicationNotification.employeeId, applicationNotification.title, applicationNotification.body);
+        await client.query("INSERT INTO audit_logs(actor_id,action,resource,resource_id,metadata,ip) VALUES($1,'update',$2,$3,$4,$5)",
+          [req.session.user.id, name, req.params.id, { fields: keys }, req.ip]);
         await client.query("COMMIT");
         res.json(result.rows[0]);
       } catch (error) {
@@ -924,6 +981,7 @@ app.post("/api/applications/:id/sign", auth, asyncRoute(async (req, res) => {
       "INSERT INTO audit_logs(actor_id,action,resource,resource_id,metadata,ip) VALUES($1,'create','contract',$2,$3,$4)",
       [req.session.user.id, contract.rows[0].id, { employee_id: app.employee_id, contract_type: `${app.employee_type || "Staff"} · ${app.title}` }, req.ip]
     );
+    await notifyEmployee(client, app.employee_id, "Employment contract signed", `Your contract for ${app.title} is signed.`);
     await client.query("COMMIT");
     res.json({ application: result.rows[0] });
   } catch (error) {
