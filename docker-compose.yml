@@ -1,13 +1,26 @@
 services:
+  clamav:
+    image: clamav/clamav:stable
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3310:3310"
+    volumes:
+      - unre-clamav-db:/var/lib/clamav
+    healthcheck:
+      test: ["CMD-SHELL", "clamdscan --ping=1 --no-summary"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 5m
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
       POSTGRES_DB: unre_hr
       POSTGRES_USER: unre
-      POSTGRES_PASSWORD: change-me
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - unre-postgres:/var/lib/postgresql/data
       - ./db/schema.sql:/docker-entrypoint-initdb.d/001-schema.sql:ro
@@ -17,4 +30,5 @@ services:
       timeout: 5s
       retries: 10
 volumes:
+  unre-clamav-db:
   unre-postgres:

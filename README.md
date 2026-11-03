@@ -45,10 +45,14 @@ University HR for the **Papua New Guinea University of Natural Resources and Env
 - View personal attendance history
 - Review personal monthly attendance summaries and filter attendance history by month
 - HR can sign an accepted internal applicant's contract with an agreed annual salary; the employee's role, appointment, department, and payslip update after signing.
+- After a signed internal offer, the staff profile shows the new appointment and retains the prior role, appointment type, department, and salary in appointment history.
 
 Optional gender and equity-group fields are HR-maintained from an employee
 record; workforce reports expose aggregate counts only. User accounts must be
-provisioned separately, and role changes take effect at the next sign-in.
+provisioned separately. Terminating an employee automatically deactivates the
+linked login; HR can explicitly reactivate the account after restoring the
+employee record. Role changes and account deactivation take effect on the next
+authenticated API request.
 
 Approved loans deduct from the monthly payslip. Policy: one outstanding loan, maximum 40% of annual salary. Payroll is created per employee and month as Pending; HR can complete or reject each entry. Completed payroll is shown in staff self-service, with period totals and a downloadable payroll register for HR.
 
@@ -56,19 +60,19 @@ Approved loans deduct from the monthly payslip. Policy: one outstanding loan, ma
 
 The static prototype is preserved and can still be opened directly in a browser.
 For the production-oriented backend, copy `.env.example` to `.env`, start
-PostgreSQL with `docker compose up -d postgres`, then run `npm install` and
-`npm start`. The Express server serves the same frontend and exposes the
+PostgreSQL and ClamAV with `docker compose up -d postgres clamav`, then run
+`npm ci` and `npm start`. Wait for ClamAV's initial signature download before
+testing document uploads. The Express server serves the same frontend and exposes the
 authenticated `/api` routes documented in `DEPLOYMENT.md`. The backend stores
 records in PostgreSQL; it does not use the prototype's `localStorage` data.
 
 Opening `index.html` directly from disk (`file://`) uses the browser-only demo
-automatically because a local file has no backend API. On localhost, a
-static-only server is also detected and uses the demo automatically. When a
-static-only server or GitHub Pages deployment is detected and uses the demo
-automatically; GitHub Pages cannot run the Express `/api` backend. Demo data
-is saved only in that browser. When a backend is available, it is used by
-default; append `?demo=1` to explicitly use the browser-only demo instead (or
-set `localStorage.unre-demo-mode` to `"true"`). For database-backed use,
+automatically because a local file has no backend API. GitHub Pages without a
+configured API base also uses the browser demo; GitHub Pages cannot run the
+Express `/api` backend. Other hosted copies require a reachable backend that
+explicitly permits demo mode; `?demo=1` and saved demo preferences do not
+override a production backend or enable the demo after a backend failure.
+Demo data is saved only in that browser. For database-backed use,
 deploy the Express app alongside PostgreSQL and open its application URL.
 Backend login/session and core employee, leave, attendance, loan, and payroll
 records are loaded through the API when demo mode is not enabled.
@@ -76,11 +80,13 @@ records are loaded through the API when demo mode is not enabled.
 `npm run db:seed` creates (or safely updates) the HR administrator from
 `ADMIN_EMAIL`/`ADMIN_PASSWORD`, plus an Administration department and linked
 `UNRE-HR-001` employee. Startup also performs this idempotent seed after a
-successful database connection. Available scripts are `npm start`, `npm run
-dev`, `npm run check`, and `npm run db:seed`.
+successful database connection. Available scripts are `npm start`,
+`npm run dev`, `npm run check`, `npm test`, and `npm run db:seed`.
 
 Backend document uploads use private local disk storage by default
 (`STORAGE_DIR`), with authenticated downloads at
 `/api/documents/:id/download`. Configure a persistent directory outside the
-web root; upload size and permitted MIME types are controlled by
-`MAX_UPLOAD_BYTES`. Demo mode continues to store demo files in localStorage.
+web root. Uploads are staged under `.quarantine` and scanned by ClamAV before
+they are accepted; scanner outages and infections fail closed. Upload size and
+permitted MIME types are controlled by `MAX_UPLOAD_BYTES`. Demo mode continues
+to store demo files in localStorage.

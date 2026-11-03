@@ -9,22 +9,32 @@ const rateLimit = require("express-rate-limit");
 const multer = require("multer");
 const bcrypt = require("bcryptjs");
 const { Pool } = require("pg");
+const { validateProductionConfig, postgresSslOptions, refreshSessionUser } = require("./security");
+const { scanBuffer } = require("./malware-scanner");
+const { seedAdminAccount } = require("./db/seed-admin");
 
 const app = express();
 const isProduction = process.env.NODE_ENV === "production";
+validateProductionConfig(process.env);
 const port = Number(process.env.PORT || 3000);
 const appRoot = path.resolve(__dirname);
 const storageDir = path.resolve(process.env.STORAGE_DIR || path.join(__dirname, "..", "unre-hr-private-storage"));
 if (storageDir === appRoot || storageDir.startsWith(`${appRoot}${path.sep}`)) throw new Error("STORAGE_DIR must not be inside the public application directory");
 const maxUploadBytes = Number(process.env.MAX_UPLOAD_BYTES || 1048576);
+const clamavConfig = { host: process.env.CLAMAV_HOST || "127.0.0.1", port: Number(process.env.CLAMAV_PORT || 3310) };
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: maxUploadBytes, files: 1 },
   fileFilter: (req, file, cb) => cb(null, /^(application\/pdf|image\/(png|jpeg|webp)|application\/(msword|vnd\.openxmlformats-officedocument\.wordprocessingml\.document))$/i.test(file.mimetype)) });
-const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: isProduction ? { rejectUnauthorized: false } : undefined });
+const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: postgresSslOptions(process.env) });
 pool.on("error", (err) => console.error("postgres pool error", err));
 if (isProduction && (!process.env.SESSION_SECRET || process.env.SESSION_SECRET.length < 32)) throw new Error("SESSION_SECRET must be at least 32 characters in production");
 if (process.env.TRUST_PROXY === "true") app.set("trust proxy", 1);
 app.disable("x-powered-by");
-app.use(helmet({ contentSecurityPolicy: false }));
+app.use(helmet({ contentSecurityPolicy: { directives: {
+  defaultSrc: ["'self'"], scriptSrc: ["'self'"], styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+  fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"], imgSrc: ["'self'", "data:", "blob:"],
+  connectSrc: ["'self'"], frameSrc: ["'self'", "blob:"], objectSrc: ["'none'"], baseUri: ["'self'"],
+  formAction: ["'self'"], upgradeInsecureRequests: isProduction ? [] : null
+} } }));
 app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: false, limit: "50kb" }));
 app.use(cookieSession({
@@ -42,7 +52,16 @@ async function audit(req, action, resource, resourceId, metadata = {}) {
   if (!req.session.user) return;
   await pool.query("INSERT INTO audit_logs(actor_id,action,resource,resource_id,metadata,ip) VALUES($1,$2,$3,$4,$5,$6)", [req.session.user.id, action, resource, resourceId || null, metadata, req.ip]);
 }
-function auth(req, res, next) { if (!req.session.user) return next(fail(401, "Authentication required")); next(); }
+async function auth(req, res, next) {
+  if (!req.session.user) return next(fail(401, "Authentication required"));
+  try {
+    if (!await refreshSessionUser(pool, req.session)) {
+      req.session = null;
+      return next(fail(401, "Authentication required"));
+    }
+    next();
+  } catch (error) { next(error); }
+}
 function roles(...roles) { return (req, res, next) => req.session.user && roles.includes(req.session.user.role) ? next() : next(fail(403, "Insufficient permissions")); }
 function csrf(req, res, next) {
   if (["GET", "HEAD", "OPTIONS"].includes(req.method)) return next();
@@ -54,7 +73,7 @@ function csrf(req, res, next) {
 app.use("/api", csrf);
 
 app.get("/api/health", asyncRoute(async (req, res) => {
-  await pool.query("SELECT 1"); res.json({ ok: true, service: "unre-hr" });
+  await pool.query("SELECT 1"); res.json({ ok: true, service: "unre-hr", demoAllowed: !isProduction });
 }));
 app.post("/api/auth/login", rateLimit({ windowMs: 10 * 60 * 1000, limit: 10, message: { error: "Too many login attempts" } }), asyncRoute(async (req, res) => {
   const email = clean(req.body.email, 320)?.toLowerCase(); const password = String(req.body.password || "");
@@ -72,7 +91,7 @@ app.get("/api/auth/me", auth, asyncRoute(async (req, res) => res.json({ user: re
 const accessRoles = ["hr", "dean", "hod", "vice_chancellor", "staff"];
 app.get("/api/users", auth, roles("hr"), asyncRoute(async (req, res) => {
   const result = await pool.query(
-    `SELECT u.id,u.email,u.role,u.active,u.employee_id,u.created_at,e.name AS employee_name
+    `SELECT u.id,u.email,u.role,u.active,u.employee_id,u.created_at,e.name AS employee_name,e.status AS employee_status
      FROM users u LEFT JOIN employees e ON e.id=u.employee_id ORDER BY u.email`
   );
   res.json({ data: result.rows });
@@ -84,6 +103,33 @@ app.patch("/api/users/:id/role", auth, roles("hr"), asyncRoute(async (req, res) 
   if (!updated.rows[0]) throw fail(404, "User not found");
   await audit(req, "update", "user", req.params.id, { role: req.body.role });
   res.json(updated.rows[0]);
+}));
+app.patch("/api/users/:id/active", auth, roles("hr"), asyncRoute(async (req, res) => {
+  if (!uuidPattern.test(req.params.id) || typeof req.body.active !== "boolean") throw fail(400, "Choose a valid user and account status");
+  if (req.params.id === req.session.user.id && req.body.active === false) throw fail(409, "You cannot deactivate your own account");
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const current = await client.query(
+      `SELECT u.id,u.email,u.role,u.active,u.employee_id,e.status AS employee_status
+       FROM users u LEFT JOIN employees e ON e.id=u.employee_id WHERE u.id=$1 FOR UPDATE OF u`,
+      [req.params.id]
+    );
+    if (!current.rows[0]) throw fail(404, "User not found");
+    if (req.body.active && current.rows[0].employee_status === "Inactive") {
+      throw fail(409, "Restore the employee record before reactivating this account");
+    }
+    const updated = await client.query("UPDATE users SET active=$1 WHERE id=$2 RETURNING id,email,role,active,employee_id", [req.body.active, req.params.id]);
+    await client.query(
+      "INSERT INTO audit_logs(actor_id,action,resource,resource_id,metadata,ip) VALUES($1,'update','user',$2,$3,$4)",
+      [req.session.user.id, req.params.id, { active: req.body.active }, req.ip]
+    );
+    await client.query("COMMIT");
+    res.json(updated.rows[0]);
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw error;
+  } finally { client.release(); }
 }));
 app.get("/api/reports/workforce", auth, roles("hr", "dean", "hod", "vice_chancellor"), asyncRoute(async (req, res) => {
   const year = String(req.query.year || new Date().getFullYear());
@@ -127,14 +173,16 @@ const resources = {
   leave: { table: "leave_requests", select: "l.*, e.name AS employee_name, e.email AS employee_email", from: "leave_requests l JOIN employees e ON e.id=l.employee_id", hr: true, owner: "l.employee_id", fields: ["employee_id","leave_type","starts_on","ends_on","note","status"] },
   attendance: { table: "attendance", select: "a.*, e.name AS employee_name", from: "attendance a JOIN employees e ON e.id=a.employee_id", hr: true, owner: "a.employee_id", fields: ["employee_id","attendance_date","status","note"] },
   tasks: { table: "tasks", select: "t.*, e.name AS employee_name, e.department_id", from: "tasks t JOIN employees e ON e.id=t.employee_id", hr: false, owner: "employee_id", fields: ["title","description","employee_id","start_date","due_date","status","priority"] },
-  loans: { table: "loans", select: "l.*, e.name AS employee_name", from: "loans l JOIN employees e ON e.id=l.employee_id", hr: true, owner: "l.employee_id", fields: ["employee_id","amount","term_months","purpose","repaid","status"] },
+  loans: { table: "loans", select: "l.*, e.name AS employee_name", from: "loans l JOIN employees e ON e.id=l.employee_id", hr: true, owner: "l.employee_id", fields: ["employee_id","loan_type","amount","term_months","purpose","repaid","status"] },
   payroll: { table: "payroll", select: "p.*, e.name AS employee_name, d.name AS department_name", from: "payroll p JOIN employees e ON e.id=p.employee_id LEFT JOIN departments d ON d.id=e.department_id", hr: true, owner: "p.employee_id", fields: ["employee_id","period","pay_date","basic_salary","housing_allowance","bonus","overtime","other_deductions","total_days","working_days","gross","nasfund","paye","loan_recovery","net","status"] },
   jobs: { table: "jobs", select: "j.*, d.name AS department_name", from: "jobs j LEFT JOIN departments d ON d.id=j.department_id", hr: false, fields: ["title","department_id","description","salary_range","closes_on","status","appointment_type","employee_type","location"] },
   applications: { table: "applications", select: "a.*, j.title AS job_title", from: "applications a JOIN jobs j ON j.id=a.job_id", hr: false, owner: "a.employee_id", fields: ["job_id","employee_id","applicant_name","applicant_email","education","experience","statement","status","interview_at","agreed_salary"] },
   documents: { table: "documents", select: "d.*", from: "documents d", hr: false, owner: "d.employee_id", fields: ["employee_id","application_id","kind","filename","content_type","size_bytes"] },
   notifications: { table: "notifications", select: "n.*", from: "notifications n", hr: false, owner: "n.user_id", fields: ["user_id","title","body","read_at"] },
   "audit-logs": { table: "audit_logs", select: "a.*,u.email AS actor_email", from: "audit_logs a LEFT JOIN users u ON u.id=a.actor_id", hr: true, fields: ["actor_id","action","resource","resource_id","metadata","ip"] },
-  contracts: { table: "contracts", select: "c.*,e.name AS employee_name,d.name AS department_name,doc.filename AS document_name", from: "contracts c JOIN employees e ON e.id=c.employee_id LEFT JOIN departments d ON d.id=e.department_id LEFT JOIN documents doc ON doc.id=c.document_id", hr: true, fields: ["employee_id","contract_type","starts_on","ends_on","status","work_permit_number","work_permit_expires_on","visa_type","visa_expires_on","document_id","notes"] }
+  contracts: { table: "contracts", select: "c.*,e.name AS employee_name,d.name AS department_name,doc.filename AS document_name", from: "contracts c JOIN employees e ON e.id=c.employee_id LEFT JOIN departments d ON d.id=e.department_id LEFT JOIN documents doc ON doc.id=c.document_id", hr: true, fields: ["employee_id","contract_type","starts_on","ends_on","status","work_permit_number","work_permit_expires_on","visa_type","visa_expires_on","document_id","notes"] },
+  roster: { table: "roster_shifts", select: "r.*,e.name AS employee_name", from: "roster_shifts r JOIN employees e ON e.id=r.employee_id", hr: true, fields: ["employee_id","starts_on","ends_on","start_time","end_time","break_minutes"] },
+  overtime: { table: "overtime_entries", select: "o.*,e.name AS employee_name", from: "overtime_entries o JOIN employees e ON e.id=o.employee_id", hr: true, fields: ["employee_id","overtime_date","hours","multiplier","reason"] }
 };
 const idPattern = /^[0-9a-f-]{20,}$/i;
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -204,8 +252,15 @@ app.post("/api/payroll", auth, asyncRoute(async (req, res) => {
       !Number.isInteger(workingDays) || workingDays < 0 || workingDays > totalDays) {
     throw fail(400, "Payroll day counts do not match the selected period");
   }
-  const employeeResult = await pool.query("SELECT id FROM employees WHERE id=$1", [employeeId]);
+  const employeeResult = await pool.query("SELECT id,annual_salary FROM employees WHERE id=$1", [employeeId]);
   if (!employeeResult.rows[0]) throw fail(404, "Employee not found");
+  const overtimeEntries = await pool.query(
+    "SELECT hours,multiplier FROM overtime_entries WHERE employee_id=$1 AND overtime_date >= $2::date AND overtime_date < ($2::date + INTERVAL '1 month')",
+    [employeeId, period]
+  );
+  const hourlyRate = Number(employeeResult.rows[0].annual_salary) / 12 / 173.33;
+  const calculatedOvertime = Math.round((overtimeEntries.rows.reduce((sum, entry) =>
+    sum + Number(entry.hours) * hourlyRate * Number(entry.multiplier), 0) + Number.EPSILON) * 100) / 100;
   const loans = await pool.query(
     "SELECT amount,repaid,term_months FROM loans WHERE employee_id=$1 AND status='Approved' AND amount>repaid",
     [employeeId]
@@ -217,9 +272,9 @@ app.post("/api/payroll", auth, asyncRoute(async (req, res) => {
     const monthsLeft = Math.max(1, Number(item.term_months) - paidMonths);
     return sum + remaining / monthsLeft;
   }, 0);
-  const gross = Math.round((basicSalary + housingAllowance + bonus + overtime + Number.EPSILON) * 100) / 100;
+  const gross = Math.round((basicSalary + housingAllowance + bonus + calculatedOvertime + Number.EPSILON) * 100) / 100;
   const nasfund = Math.round((basicSalary * 0.06 + Number.EPSILON) * 100) / 100;
-  const paye = calculatePaye(basicSalary + housingAllowance + bonus + overtime);
+  const paye = calculatePaye(basicSalary + housingAllowance + bonus + calculatedOvertime);
   const roundedLoanRecovery = Math.round((loanRecovery + Number.EPSILON) * 100) / 100;
   const net = Math.round((gross - nasfund - paye - roundedLoanRecovery - otherDeductions + Number.EPSILON) * 100) / 100;
   if (net < 0) throw fail(400, "Deductions exceed gross pay");
@@ -231,7 +286,7 @@ app.post("/api/payroll", auth, asyncRoute(async (req, res) => {
         total_days,working_days,gross,nasfund,paye,loan_recovery,net,status)
        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,'Pending')
        RETURNING *`,
-      [employeeId, period, payDate, basicSalary, housingAllowance, bonus, overtime, otherDeductions,
+      [employeeId, period, payDate, basicSalary, housingAllowance, bonus, calculatedOvertime, otherDeductions,
         totalDays, workingDays, gross, nasfund, paye, roundedLoanRecovery, net]
     );
     const payroll = result.rows[0];
@@ -263,6 +318,28 @@ app.patch("/api/payroll/:id", auth, asyncRoute(async (req, res) => {
       if (!current.rows[0]) throw fail(404, "Payroll entry not found");
       throw fail(409, "Payroll entry has already been finalised");
     }
+    if (req.body.status === "Completed" && Number(result.rows[0].loan_recovery) > 0) {
+      const loans = await client.query(
+        "SELECT id,amount,repaid,term_months FROM loans WHERE employee_id=$1 AND status='Approved' AND amount>repaid ORDER BY created_at,id FOR UPDATE",
+        [result.rows[0].employee_id]
+      );
+      let remainingRecovery = Number(result.rows[0].loan_recovery);
+      for (const loan of loans.rows) {
+        if (remainingRecovery <= 0) break;
+        const amount = Number(loan.amount);
+        const repaid = Number(loan.repaid || 0);
+        const balance = amount - repaid;
+        const paidMonths = Math.floor(repaid / (amount / Number(loan.term_months)));
+        const monthsLeft = Math.max(1, Number(loan.term_months) - paidMonths);
+        const installment = Math.round((balance / monthsLeft + Number.EPSILON) * 100) / 100;
+        const applied = Math.min(balance, installment, remainingRecovery);
+        const nextRepaid = Math.round((repaid + applied + Number.EPSILON) * 100) / 100;
+        await client.query("UPDATE loans SET repaid=$1,status=$2 WHERE id=$3", [
+          nextRepaid, nextRepaid >= amount ? "Paid" : "Approved", loan.id
+        ]);
+        remainingRecovery = Math.max(0, Math.round((remainingRecovery - applied + Number.EPSILON) * 100) / 100);
+      }
+    }
     await client.query(
       "INSERT INTO audit_logs(actor_id,action,resource,resource_id,metadata,ip) VALUES($1,'update','payroll',$2,$3,$4)",
       [req.session.user.id, req.params.id, { status: req.body.status }, req.ip]
@@ -278,34 +355,86 @@ function canAccessDocument(user, document) {
   return user.role === "hr" || (document.employee_id && document.employee_id === user.employeeId);
 }
 app.post("/api/documents/upload", auth, upload.single("file"), asyncRoute(async (req, res) => {
-  if (!req.file || !documentMimeTypes.has(req.file.mimetype)) throw fail(400, "Unsupported or missing document file");
+  if (!req.file || !documentMimeTypes.has(req.file.mimetype) || req.file.size === 0) throw fail(400, "Unsupported, empty, or missing document file");
   const employeeId = req.body.employee_id || req.session.user.employeeId;
   if (!employeeId || (req.session.user.role !== "hr" && employeeId !== req.session.user.employeeId)) throw fail(403, "You may only upload your own documents");
   const kind = clean(req.body.kind || "Other", 100);
-  await fs.promises.mkdir(storageDir, { recursive: true });
-  const storageKey = `${crypto.randomUUID()}${path.extname(req.file.originalname).toLowerCase()}`;
-  await fs.promises.writeFile(path.join(storageDir, storageKey), req.file.buffer, { flag: "wx", mode: 0o600 });
-  let result;
+  const filename = path.basename(req.file.originalname).slice(0, 255);
+  const extension = {
+    "application/pdf": ".pdf", "image/png": ".png", "image/jpeg": ".jpg", "image/webp": ".webp",
+    "application/msword": ".doc", "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx"
+  }[req.file.mimetype];
+  let previousDocument;
   if (req.body.replace_id) {
+    if (!idPattern.test(req.body.replace_id)) throw fail(400, "Invalid document id");
     const existing = await pool.query("SELECT * FROM documents WHERE id=$1", [req.body.replace_id]);
-    if (!existing.rows[0] || !canAccessDocument(req.session.user, existing.rows[0])) {
-      await fs.promises.unlink(path.join(storageDir, storageKey)).catch(() => {});
-      throw fail(403, "You may only replace your own documents");
-    }
-    result = await pool.query(
-      `UPDATE documents SET employee_id=$1,kind=$2,filename=$3,content_type=$4,size_bytes=$5,storage_key=$6,created_by=$7 WHERE id=$8 RETURNING *`,
-      [employeeId, kind, path.basename(req.file.originalname), req.file.mimetype, req.file.size, storageKey, req.session.user.id, req.body.replace_id]
-    );
-    if (existing.rows[0].storage_key) await fs.promises.unlink(path.join(storageDir, existing.rows[0].storage_key)).catch(() => {});
-  } else {
-    result = await pool.query(
-      `INSERT INTO documents(employee_id,application_id,kind,filename,content_type,size_bytes,storage_key,created_by)
-       VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
-      [employeeId, req.body.application_id || null, kind, path.basename(req.file.originalname), req.file.mimetype, req.file.size, storageKey, req.session.user.id]
-    );
+    previousDocument = existing.rows[0];
+    if (!previousDocument) throw fail(404, "Document not found");
+    if (!canAccessDocument(req.session.user, previousDocument)) throw fail(403, "You may only replace your own documents");
   }
-  await audit(req, "upload", "document", result.rows[0].id, { filename: result.rows[0].filename, size: req.file.size });
-  res.status(201).json(result.rows[0]);
+
+  const quarantineDir = path.join(storageDir, ".quarantine");
+  const quarantinePath = path.join(quarantineDir, `${crypto.randomUUID()}.upload`);
+  let storageKey;
+  let storagePath;
+  let promoted = false;
+  let committed = false;
+  let client;
+  try {
+    await fs.promises.mkdir(quarantineDir, { recursive: true, mode: 0o700 });
+    await fs.promises.writeFile(quarantinePath, req.file.buffer, { flag: "wx", mode: 0o600 });
+    let scan;
+    try { scan = await scanBuffer(req.file.buffer, clamavConfig); }
+    catch (error) {
+      console.error("ClamAV scan failed", error.message);
+      throw fail(503, "Document scanner unavailable; upload was not accepted");
+    }
+    if (!scan.clean) throw fail(422, "Malware detected; document was rejected");
+
+    await fs.promises.mkdir(storageDir, { recursive: true, mode: 0o700 });
+    storageKey = `${crypto.randomUUID()}${extension}`;
+    storagePath = path.join(storageDir, storageKey);
+    await fs.promises.rename(quarantinePath, storagePath);
+    promoted = true;
+
+    client = await pool.connect();
+    await client.query("BEGIN");
+    let result;
+    if (req.body.replace_id) {
+      const current = await client.query("SELECT * FROM documents WHERE id=$1 FOR UPDATE", [req.body.replace_id]);
+      if (!current.rows[0]) throw fail(404, "Document not found");
+      if (!canAccessDocument(req.session.user, current.rows[0])) throw fail(403, "You may only replace your own documents");
+      previousDocument = current.rows[0];
+      result = await client.query(
+        `UPDATE documents SET employee_id=$1,kind=$2,filename=$3,content_type=$4,size_bytes=$5,storage_key=$6,created_by=$7 WHERE id=$8 RETURNING *`,
+        [employeeId, kind, filename, req.file.mimetype, req.file.size, storageKey, req.session.user.id, req.body.replace_id]
+      );
+    } else {
+      result = await client.query(
+        `INSERT INTO documents(employee_id,application_id,kind,filename,content_type,size_bytes,storage_key,created_by)
+         VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+        [employeeId, req.body.application_id || null, kind, filename, req.file.mimetype, req.file.size, storageKey, req.session.user.id]
+      );
+    }
+    await client.query(
+      "INSERT INTO audit_logs(actor_id,action,resource,resource_id,metadata,ip) VALUES($1,'upload','document',$2,$3,$4)",
+      [req.session.user.id, result.rows[0].id, { filename, size: req.file.size }, req.ip]
+    );
+    await client.query("COMMIT");
+    committed = true;
+    if (previousDocument?.storage_key) {
+      const previousPath = path.resolve(storageDir, previousDocument.storage_key);
+      if (path.dirname(previousPath) === storageDir) await fs.promises.unlink(previousPath).catch(() => {});
+    }
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    if (client) await client.query("ROLLBACK").catch(() => {});
+    if (promoted && !committed) await fs.promises.unlink(storagePath).catch(() => {});
+    throw error;
+  } finally {
+    if (client) client.release();
+    await fs.promises.unlink(quarantinePath).catch(() => {});
+  }
 }));
 app.get("/api/documents/:id/download", auth, asyncRoute(async (req, res) => {
   if (!idPattern.test(req.params.id)) throw fail(400, "Invalid id");
@@ -341,31 +470,40 @@ app.patch("/api/leave/:id", auth, asyncRoute(async (req, res) => {
     const leave = current.rows[0];
     if (!leave) throw fail(404, "Leave request not found");
     const isHrUser = req.session.user.role === "hr";
-    if (!isHrUser && leave.employee_id !== req.session.user.employeeId) throw fail(403, "You may only update your own leave");
-    const fields = isHrUser ? ["leave_type", "starts_on", "ends_on", "note", "status"] : ["leave_type", "starts_on", "ends_on", "note"];
+    if (!isHrUser) throw fail(403, "Only HR can update a submitted leave request");
+    const fields = ["status"];
     const keys = fields.filter((key) => req.body[key] !== undefined);
     if (!keys.length) throw fail(400, "At least one permitted field is required");
-    if (!isHrUser && req.body.status !== undefined) throw fail(403, "Only HR can approve or reject leave");
+    if (leave.status !== "Pending" || !["Approved", "Rejected"].includes(req.body.status)) {
+      throw fail(409, "Only pending leave requests can be approved or rejected");
+    }
     const values = keys.map((key) => clean(req.body[key]));
     const set = keys.map((key, index) => `${key}=$${index + 1}`).join(",");
     const params = [...values, req.params.id];
-    if (isHrUser) params.push(req.session.user.id);
+    params.push(req.session.user.id);
     const updated = await client.query(
-      `UPDATE leave_requests SET ${set}${isHrUser ? ",reviewed_by=$" + params.length + ",reviewed_at=now()" : ""} WHERE id=$${values.length + 1} RETURNING *`,
+      `UPDATE leave_requests SET ${set},reviewed_by=$${params.length},reviewed_at=now() WHERE id=$${values.length + 1} AND status='Pending' RETURNING *`,
       params
     );
     const result = updated.rows[0];
-    if (isHrUser && result.status === "Approved") {
-      await client.query("UPDATE employees SET status='On Leave', updated_at=now() WHERE id=$1", [result.employee_id]);
-      await client.query("DELETE FROM attendance WHERE employee_id=$1 AND attendance_date BETWEEN $2 AND $3 AND (note LIKE 'Approved % leave' OR status='On Leave')", [result.employee_id, result.starts_on, result.ends_on]);
+    if (!result) throw fail(409, "Leave request was already reviewed; reload and try again");
+    if (result.status === "Approved") {
+      await client.query(
+        `UPDATE employees SET status=CASE WHEN EXISTS (
+           SELECT 1 FROM leave_requests WHERE employee_id=$1 AND status='Approved' AND starts_on<=current_date AND ends_on>=current_date
+         ) THEN 'On Leave' ELSE 'Active' END, updated_at=now()
+         WHERE id=$1 AND status<>'Inactive'`,
+        [result.employee_id]
+      );
+      await client.query("DELETE FROM attendance WHERE employee_id=$1 AND attendance_date BETWEEN $2 AND $3 AND note LIKE 'Approved % leave'", [result.employee_id, result.starts_on, result.ends_on]);
       await client.query(
         `INSERT INTO attendance(employee_id,attendance_date,status,note)
          SELECT $1, days::date, 'On Leave', $4
          FROM generate_series($2::date,$3::date,'1 day') AS days
-         ON CONFLICT(employee_id,attendance_date) DO UPDATE SET status='On Leave', note=EXCLUDED.note`,
+         ON CONFLICT(employee_id,attendance_date) DO NOTHING`,
         [result.employee_id, result.starts_on, result.ends_on, `Approved ${result.leave_type.toLowerCase()} leave`]
       );
-    } else if (isHrUser && result.status === "Rejected") {
+    } else if (result.status === "Rejected") {
       const active = await client.query(
         "SELECT 1 FROM leave_requests WHERE employee_id=$1 AND status='Approved' AND starts_on<=current_date AND ends_on>=current_date AND id<>$2 LIMIT 1",
         [result.employee_id, result.id]
@@ -373,7 +511,7 @@ app.patch("/api/leave/:id", auth, asyncRoute(async (req, res) => {
       if (!active.rows.length) await client.query("UPDATE employees SET status='Active', updated_at=now() WHERE id=$1 AND status='On Leave'", [result.employee_id]);
       await client.query("DELETE FROM attendance WHERE employee_id=$1 AND attendance_date BETWEEN $2 AND $3 AND note LIKE 'Approved % leave'", [result.employee_id, result.starts_on, result.ends_on]);
     }
-    if (isHrUser && (result.status === "Approved" || result.status === "Rejected")) {
+    if (result.status === "Approved" || result.status === "Rejected") {
       const user = await client.query("SELECT id FROM users WHERE employee_id=$1 AND active=true", [result.employee_id]);
       if (user.rows[0]) await client.query(
         "INSERT INTO notifications(user_id,title,body) VALUES($1,$2,$3)",
@@ -381,7 +519,10 @@ app.patch("/api/leave/:id", auth, asyncRoute(async (req, res) => {
       );
     }
     await client.query("COMMIT");
-    await audit(req, "update", "leave", result.id, { fields: keys, status: result.status });
+    await client.query(
+      "INSERT INTO audit_logs(actor_id,action,resource,resource_id,metadata,ip) VALUES($1,'update','leave',$2,$3,$4)",
+      [req.session.user.id, result.id, { fields: keys, status: result.status }, req.ip]
+    );
     res.json(result);
   } catch (error) {
     await client.query("ROLLBACK").catch(() => {});
@@ -390,9 +531,19 @@ app.patch("/api/leave/:id", auth, asyncRoute(async (req, res) => {
 }));
 for (const [name, spec] of Object.entries(resources)) {
   if (name === "payroll") continue;
-  const hrOnly = ["employees", "departments", "payroll", "audit-logs", "contracts"];
+  const hrOnly = ["employees", "departments", "payroll", "audit-logs", "contracts", "roster", "overtime"];
   app.get(`/api/${name}`, auth, asyncRoute(async (req, res) => {
     if (hrOnly.includes(name) && req.session.user.role !== "hr" && !["employees", "payroll"].includes(name)) throw fail(403, "HR access required");
+    if (name === "employees" && req.session.user.role === "hr") {
+      await pool.query(
+        `UPDATE employees e SET status=CASE WHEN EXISTS (
+           SELECT 1 FROM leave_requests l WHERE l.employee_id=e.id AND l.status='Approved' AND l.starts_on<=current_date AND l.ends_on>=current_date
+         ) THEN 'On Leave' ELSE 'Active' END, updated_at=now()
+         WHERE e.status<>'Inactive' AND (e.status='On Leave' OR EXISTS (
+           SELECT 1 FROM leave_requests l WHERE l.employee_id=e.id AND l.status='Approved' AND l.starts_on<=current_date AND l.ends_on>=current_date
+         ))`
+      );
+    }
     const params = []; let where = "";
     if (name === "notifications") {
       params.push(req.session.user.id);
@@ -408,6 +559,37 @@ for (const [name, spec] of Object.entries(resources)) {
   app.post(`/api/${name}`, auth, asyncRoute(async (req, res) => {
     if (hrOnly.includes(name) && req.session.user.role !== "hr") throw fail(403, "HR access required");
     if ((name === "jobs" || name === "notifications" || name === "tasks") && req.session.user.role !== "hr") throw fail(403, "HR access required");
+    if (name === "leave") {
+      const validDate = (value) => /^\d{4}-\d{2}-\d{2}$/.test(value || "") &&
+        !Number.isNaN(Date.parse(`${value}T00:00:00.000Z`)) &&
+        new Date(`${value}T00:00:00.000Z`).toISOString().slice(0, 10) === value;
+      const employeeId = req.session.user.role === "hr" ? clean(req.body.employee_id, 64) : req.session.user.employeeId;
+      if (!uuidPattern.test(employeeId || "") || !["Annual", "Sick", "Personal", "Emergency", "Research"].includes(req.body.leave_type) ||
+          !validDate(req.body.starts_on) || !validDate(req.body.ends_on) || req.body.ends_on < req.body.starts_on) {
+        throw fail(400, "A leave request needs an employee, leave type, and valid date range");
+      }
+      const employee = await pool.query("SELECT id FROM employees WHERE id=$1 AND status<>'Inactive'", [employeeId]);
+      if (!employee.rows[0]) throw fail(404, "Active employee not found");
+      req.body.employee_id = employeeId;
+      req.body.loan_type = ["Education", "Housing", "Emergency", "Salary advance"].includes(req.body.loan_type) ? req.body.loan_type : "Staff loan";
+      req.body.status = "Pending";
+    }
+    if (name === "loans") {
+      const employeeId = req.session.user.role === "hr" ? clean(req.body.employee_id, 64) : req.session.user.employeeId;
+      const amount = moneyValue(req.body.amount, "Loan amount", { required: true, allowZero: false });
+      const termMonths = Number(req.body.term_months);
+      if (!uuidPattern.test(employeeId || "") || amount < 500 || !Number.isInteger(termMonths) || termMonths < 1 || termMonths > 36) {
+        throw fail(400, "A loan needs a valid employee, amount of at least K500, and a term from 1 to 36 months");
+      }
+      const employee = await pool.query("SELECT annual_salary FROM employees WHERE id=$1 AND status<>'Inactive'", [employeeId]);
+      if (!employee.rows[0]) throw fail(404, "Active employee not found");
+      const active = await pool.query("SELECT COALESCE(SUM(amount-repaid),0) AS outstanding FROM loans WHERE employee_id=$1 AND status='Approved' AND amount>repaid", [employeeId]);
+      if (Number(active.rows[0].outstanding) > 0) throw fail(409, "Employee already has an outstanding staff loan");
+      if (amount > Number(employee.rows[0].annual_salary) * 0.4) throw fail(400, "Loan exceeds 40% of annual salary");
+      req.body.employee_id = employeeId;
+      req.body.status = "Pending";
+      req.body.repaid = 0;
+    }
     if (name === "tasks") {
       const validDate = (value) => /^\d{4}-\d{2}-\d{2}$/.test(value || "") &&
         !Number.isNaN(Date.parse(`${value}T00:00:00.000Z`)) &&
@@ -420,6 +602,65 @@ for (const [name, spec] of Object.entries(resources)) {
           (req.body.priority !== undefined && !["Low", "Normal", "High"].includes(req.body.priority)) ||
           (req.body.status !== undefined && req.body.status !== "New")) {
         throw fail(400, "A task needs an assignee, title, description, valid dates, and an allowed priority");
+      }
+    }
+    if (name === "jobs") {
+      const validDate = (value) => /^\d{4}-\d{2}-\d{2}$/.test(value || "") &&
+        !Number.isNaN(Date.parse(`${value}T00:00:00.000Z`)) &&
+        new Date(`${value}T00:00:00.000Z`).toISOString().slice(0, 10) === value;
+      const title = clean(req.body.title, 180);
+      const description = clean(req.body.description, 5000);
+      const closesOn = clean(req.body.closes_on, 10);
+      if (!title || !description || !parseSalaryRange(req.body.salary_range) || !validDate(closesOn) || closesOn < new Date().toISOString().slice(0, 10) ||
+          (req.body.appointment_type !== undefined && !["Full-Time", "Part-Time", "Contract", "Tenure-Track"].includes(req.body.appointment_type)) ||
+          (req.body.employee_type !== undefined && !["Faculty", "Staff", "Adjunct", "Research"].includes(req.body.employee_type))) {
+        throw fail(400, "A job draft needs a title, description, salary range, closing date, and valid appointment details");
+      }
+      req.body.title = title;
+      req.body.description = description;
+      req.body.closes_on = closesOn;
+      req.body.status = "Draft";
+    }
+    if (name === "roster") {
+      const validDate = (value) => /^\d{4}-\d{2}-\d{2}$/.test(value || "") &&
+        !Number.isNaN(Date.parse(`${value}T00:00:00.000Z`)) &&
+        new Date(`${value}T00:00:00.000Z`).toISOString().slice(0, 10) === value;
+      const validTime = (value) => /^(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/.test(value || "");
+      const employeeId = clean(req.body.employee_id, 64);
+      if (!uuidPattern.test(employeeId || "") || !validDate(req.body.starts_on) || !validDate(req.body.ends_on) ||
+          req.body.ends_on < req.body.starts_on || !validTime(req.body.start_time) || !validTime(req.body.end_time) ||
+          req.body.start_time === req.body.end_time || !Number.isInteger(Number(req.body.break_minutes)) || Number(req.body.break_minutes) < 0) {
+        throw fail(400, "A roster shift needs a valid employee, dates, times, and break length");
+      }
+      const employee = await pool.query("SELECT employee_type,role,status FROM employees WHERE id=$1", [employeeId]);
+      if (!employee.rows[0] || employee.rows[0].status === "Inactive") throw fail(404, "Active employee not found");
+      const teaching = employee.rows[0].employee_type === "Faculty" || /lecturer|tutor|professor|academic/i.test(employee.rows[0].role || "");
+      let expectedEnd;
+      if (teaching) {
+        const [year, month, day] = req.body.starts_on.split("-").map(Number);
+        const targetMonth = new Date(Date.UTC(year, month - 1 + 6, 1));
+        const lastDay = new Date(Date.UTC(targetMonth.getUTCFullYear(), targetMonth.getUTCMonth() + 1, 0)).getUTCDate();
+        const anniversary = new Date(Date.UTC(targetMonth.getUTCFullYear(), targetMonth.getUTCMonth(), Math.min(day, lastDay)));
+        anniversary.setUTCDate(anniversary.getUTCDate() - 1);
+        expectedEnd = anniversary.toISOString().slice(0, 10);
+      } else {
+        const end = new Date(`${req.body.starts_on}T00:00:00.000Z`);
+        end.setUTCDate(end.getUTCDate() + 13);
+        expectedEnd = end.toISOString().slice(0, 10);
+      }
+      if (req.body.ends_on !== expectedEnd) throw fail(400, teaching
+        ? "Teaching rosters must cover six calendar months."
+        : "This employee's roster must cover exactly two weeks.");
+    }
+    if (name === "overtime") {
+      const validDate = (value) => /^\d{4}-\d{2}-\d{2}$/.test(value || "") &&
+        !Number.isNaN(Date.parse(`${value}T00:00:00.000Z`)) &&
+        new Date(`${value}T00:00:00.000Z`).toISOString().slice(0, 10) === value;
+      const hours = Number(req.body.hours);
+      if (!uuidPattern.test(clean(req.body.employee_id, 64) || "") || !validDate(req.body.overtime_date) ||
+          !Number.isFinite(hours) || hours <= 0 || hours > 24 || Math.round(hours * 4) !== hours * 4 ||
+          ![1.5, 2].includes(Number(req.body.multiplier)) || !clean(req.body.reason, 500)) {
+        throw fail(400, "Overtime needs a valid employee, date, quarter-hour amount, multiplier, and reason");
       }
     }
     if (name === "contracts") {
@@ -447,6 +688,7 @@ for (const [name, spec] of Object.entries(resources)) {
       req.body.agreed_salary = null;
     }
     const { keys, values } = valuesFor(req, spec);
+    if (name === "overtime") { keys.push("created_by"); values.push(req.session.user.id); }
     if (name === "contracts") keys.forEach((key, index) => {
       if (values[index] === "" && ["ends_on", "work_permit_number", "work_permit_expires_on", "visa_type", "visa_expires_on", "document_id", "notes"].includes(key)) values[index] = null;
     });
@@ -459,6 +701,41 @@ for (const [name, spec] of Object.entries(resources)) {
     if (!idPattern.test(req.params.id)) throw fail(400, "Invalid id");
     if (hrOnly.includes(name) && req.session.user.role !== "hr") throw fail(403, "HR access required");
     if (["applications", "jobs"].includes(name) && req.session.user.role !== "hr") throw fail(403, "HR access required");
+    if (name === "loans") {
+      if (req.session.user.role !== "hr") throw fail(403, "Only HR can review loans");
+      if (Object.keys(req.body).some((field) => field !== "status") || !["Approved", "Rejected"].includes(req.body.status)) {
+        throw fail(400, "A loan review can only approve or reject an application");
+      }
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        const found = await client.query("SELECT id,employee_id,amount,status FROM loans WHERE id=$1 FOR UPDATE", [req.params.id]);
+        const loan = found.rows[0];
+        if (!loan) throw fail(404, "Loan application not found");
+        if (loan.status !== "Pending") throw fail(409, "Only pending loan applications can be reviewed");
+        if (req.body.status === "Approved") {
+          const employee = await client.query("SELECT annual_salary,status FROM employees WHERE id=$1 FOR UPDATE", [loan.employee_id]);
+          if (!employee.rows[0] || employee.rows[0].status === "Inactive") throw fail(409, "Inactive employees cannot receive a loan");
+          const active = await client.query("SELECT COALESCE(SUM(amount-repaid),0) AS outstanding FROM loans WHERE employee_id=$1 AND status='Approved' AND amount>repaid", [loan.employee_id]);
+          if (Number(active.rows[0].outstanding) > 0) throw fail(409, "Employee already has an outstanding staff loan");
+          if (Number(loan.amount) > Number(employee.rows[0].annual_salary) * 0.4) throw fail(409, "Loan exceeds 40% of annual salary");
+        }
+        const result = await client.query(
+          "UPDATE loans SET status=$1,reviewed_by=$2,reviewed_at=now() WHERE id=$3 AND status='Pending' RETURNING *",
+          [req.body.status, req.session.user.id, req.params.id]
+        );
+        await client.query(
+          "INSERT INTO audit_logs(actor_id,action,resource,resource_id,metadata,ip) VALUES($1,'update','loans',$2,$3,$4)",
+          [req.session.user.id, req.params.id, { status: req.body.status }, req.ip]
+        );
+        await client.query("COMMIT");
+        res.json(result.rows[0]);
+      } catch (error) {
+        await client.query("ROLLBACK").catch(() => {});
+        throw error;
+      } finally { client.release(); }
+      return;
+    }
     if (name === "applications" && req.body.status !== undefined &&
         !["Pending", "Shortlisted", "Interviewed", "Accepted", "Declined", "Contract signed"].includes(req.body.status)) {
       throw fail(400, "Invalid application status");
@@ -504,8 +781,21 @@ for (const [name, spec] of Object.entries(resources)) {
       }
       expectedStatus = previousStatus;
     }
-    if (name === "jobs" && req.body.status !== undefined && !["Draft", "Open", "Closed"].includes(req.body.status)) {
-      throw fail(400, "Invalid job posting status");
+    if (name === "jobs" && (req.body.status !== undefined || req.body.closes_on !== undefined)) {
+      const current = await pool.query("SELECT status,closes_on FROM jobs WHERE id=$1", [req.params.id]);
+      if (!current.rows[0]) throw fail(404, "Job posting not found");
+      const validDate = (value) => /^\d{4}-\d{2}-\d{2}$/.test(value || "") &&
+        !Number.isNaN(Date.parse(`${value}T00:00:00.000Z`)) &&
+        new Date(`${value}T00:00:00.000Z`).toISOString().slice(0, 10) === value;
+      const closesOn = req.body.closes_on ?? current.rows[0].closes_on?.toISOString?.().slice(0, 10) ?? current.rows[0].closes_on;
+      if (req.body.status !== undefined) {
+        const transitions = { Draft: ["Open"], Open: ["Closed"], Closed: ["Open"] };
+        if (!transitions[current.rows[0].status]?.includes(req.body.status)) throw fail(409, "Job posting cannot move from its current status to that status");
+      }
+      if (req.body.closes_on !== undefined && !validDate(req.body.closes_on)) throw fail(400, "Closing date must be a valid calendar date");
+      if ((req.body.status === "Open" || current.rows[0].status === "Open") && closesOn && closesOn < new Date().toISOString().slice(0, 10)) {
+        throw fail(409, "A posting with a past closing date cannot accept applications");
+      }
     }
     if (name === "contracts") {
       const dateIsValid = (value) => value === null || value === undefined || value === "" ||
@@ -536,9 +826,36 @@ for (const [name, spec] of Object.entries(resources)) {
     const params = [...values, req.params.id];
     if (expectedStatus !== undefined) statusGuard = ` AND status=$${values.length + 2}`;
     let guard = ""; if (req.session.user.role !== "hr" && spec.owner) { params.push(req.session.user.employeeId); guard = ` AND ${spec.owner}=$${params.length}`; }
-    const set = keys.map((key, i) => `${key}=$${i + 1}`).join(",") + (["tasks", "contracts"].includes(name) ? ",updated_at=now()" : "");
+    const set = keys.map((key, i) => `${key}=$${i + 1}`).join(",") + (["tasks", "contracts", "employees"].includes(name) ? ",updated_at=now()" : "");
     if (statusGuard) params.push(expectedStatus);
-    const result = await pool.query(`UPDATE ${spec.table} SET ${set} WHERE id=$${values.length + 1}${guard}${statusGuard} RETURNING *`, params);
+    const updateSql = `UPDATE ${spec.table} SET ${set} WHERE id=$${values.length + 1}${guard}${statusGuard} RETURNING *`;
+    if (name === "employees" && req.body.status === "Inactive") {
+      if (req.params.id === req.session.user.employeeId) throw fail(409, "You cannot terminate your own employee record while signed in");
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        const result = await client.query(updateSql, params);
+        if (!result.rows[0]) throw fail(404, "Record not found");
+        const disabled = await client.query("UPDATE users SET active=false WHERE employee_id=$1 AND active=true RETURNING id", [req.params.id]);
+        await client.query(
+          "INSERT INTO audit_logs(actor_id,action,resource,resource_id,metadata,ip) VALUES($1,'update','employee',$2,$3,$4)",
+          [req.session.user.id, req.params.id, { fields: keys, status: "Inactive" }, req.ip]
+        );
+        for (const user of disabled.rows) {
+          await client.query(
+            "INSERT INTO audit_logs(actor_id,action,resource,resource_id,metadata,ip) VALUES($1,'update','user',$2,$3,$4)",
+            [req.session.user.id, user.id, { active: false, reason: "employee-inactive" }, req.ip]
+          );
+        }
+        await client.query("COMMIT");
+        res.json(result.rows[0]);
+      } catch (error) {
+        await client.query("ROLLBACK").catch(() => {});
+        throw error;
+      } finally { client.release(); }
+      return;
+    }
+    const result = await pool.query(updateSql, params);
     if (!result.rows[0]) {
       if (name === "applications" && statusGuard) throw fail(409, "Application stage changed; reload and try again");
       if (name === "tasks" && statusGuard) throw fail(409, "Task status changed; reload and try again");
@@ -567,6 +884,25 @@ app.post("/api/applications/:id/sign", auth, asyncRoute(async (req, res) => {
     if (salaryRange && (salary < salaryRange.min || salary > salaryRange.max)) {
       throw fail(400, "Agreed salary must be within the advertised salary range");
     }
+    const employeeResult = await client.query(
+      `SELECT e.id,e.role,e.employee_type,e.annual_salary,e.status,d.name AS department_name
+       FROM employees e LEFT JOIN departments d ON d.id=e.department_id
+       WHERE e.id=$1 FOR UPDATE OF e`,
+      [app.employee_id]
+    );
+    const previous = employeeResult.rows[0];
+    if (!previous || previous.status === "Inactive") throw fail(409, "The selected employee is no longer active");
+    await client.query(
+      `INSERT INTO employment_history(
+        employee_id,application_id,previous_role,previous_employee_type,previous_department,previous_annual_salary,
+        new_role,new_employee_type,new_department,new_annual_salary,effective_on,recorded_by
+      ) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,CURRENT_DATE,$11)`,
+      [app.employee_id, app.id, previous.role, previous.employee_type, previous.department_name,
+        previous.annual_salary, app.title, app.employee_type || "Staff", app.department_id
+          ? (await client.query("SELECT name FROM departments WHERE id=$1", [app.department_id])).rows[0]?.name || null
+          : null,
+        salary, req.session.user.id]
+    );
     await client.query(
       "UPDATE employees SET role=$1,annual_salary=$2,department_id=$3,employee_type=$4,updated_at=now() WHERE id=$5",
       [app.title, salary, app.department_id, app.employee_type || "Staff", app.employee_id]
@@ -595,6 +931,19 @@ app.post("/api/applications/:id/sign", auth, asyncRoute(async (req, res) => {
     throw error;
   } finally { client.release(); }
 }));
+app.get("/api/employees/:id/employment-history", auth, asyncRoute(async (req, res) => {
+  if (!uuidPattern.test(req.params.id)) throw fail(400, "Invalid employee id");
+  if (req.session.user.role !== "hr" && req.session.user.employeeId !== req.params.id) {
+    throw fail(403, "You may only view your own employment history");
+  }
+  const result = await pool.query(
+    `SELECT id,employee_id,application_id,previous_role,previous_employee_type,previous_department,previous_annual_salary,
+       new_role,new_employee_type,new_department,new_annual_salary,effective_on,created_at
+     FROM employment_history WHERE employee_id=$1 ORDER BY effective_on DESC,created_at DESC`,
+    [req.params.id]
+  );
+  res.json({ data: result.rows });
+}));
 // The public API uses the more explicit plural name while keeping /api/leave for the prototype.
 app.get("/api/leave-requests", auth, (req, res, next) => { req.url = "/api/leave"; app._router.handle(req, res, next); });
 app.post("/api/leave-requests", auth, (req, res, next) => { req.url = "/api/leave"; app._router.handle(req, res, next); });
@@ -602,11 +951,17 @@ app.patch("/api/leave-requests/:id", auth, (req, res, next) => { req.url = `/api
 app.get("/api/notifications", auth, asyncRoute(async (req, res) => { const r = await pool.query("SELECT * FROM notifications WHERE user_id=$1 ORDER BY created_at DESC LIMIT 100", [req.session.user.id]); res.json({ data: r.rows }); }));
 app.post("/api/notifications/:id/read", auth, asyncRoute(async (req, res) => { const r = await pool.query("UPDATE notifications SET read_at=now() WHERE id=$1 AND user_id=$2 RETURNING *", [req.params.id, req.session.user.id]); if (!r.rows[0]) throw fail(404, "Notification not found"); res.json(r.rows[0]); }));
 
-app.use(express.static(path.join(__dirname)));
-app.use((req, res, next) => req.path.startsWith("/api/") ? next(fail(404, "API route not found")) : res.sendFile(path.join(__dirname, "index.html")));
+app.get(["/app.js", "/security.js", "/styles.css"], (req, res, next) =>
+  res.sendFile(path.join(appRoot, path.basename(req.path)), next));
+app.use("/assets", express.static(path.join(appRoot, "assets"), { dotfiles: "ignore", index: false }));
+app.use((req, res, next) => {
+  if (req.path === "/api" || req.path.startsWith("/api/")) return next(fail(404, "API route not found"));
+  if (path.extname(req.path)) return next(fail(404, "Not found"));
+  res.sendFile(path.join(appRoot, "index.html"));
+});
 app.use((err, req, res, next) => {
-  console.error(err);
   const status = err.code === "LIMIT_FILE_SIZE" ? 413 : err.code === "LIMIT_UNEXPECTED_FILE" ? 400 : (err.status || 500);
+  if (status >= 500) console.error(err);
   const message = err.code === "LIMIT_FILE_SIZE" ? "Document exceeds the upload size limit" : err.code === "LIMIT_UNEXPECTED_FILE" ? "Unsupported document type" : (err.status ? err.message : "Internal server error");
   res.status(status).json({ error: message });
 });
@@ -615,31 +970,7 @@ async function seedAdmin() {
   if (!process.env.ADMIN_PASSWORD) throw new Error("ADMIN_PASSWORD is required; set it before starting the service");
   const email = (process.env.ADMIN_EMAIL || "hr@unre.ac.pg").trim().toLowerCase();
   if (process.env.ADMIN_PASSWORD.length < 12) throw new Error("ADMIN_PASSWORD must be at least 12 characters");
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
-    const department = await client.query(
-      `INSERT INTO departments(name,code,description,location) VALUES('Administration','ADMIN','Central university administration and HR.','Administration Block')
-       ON CONFLICT(code) DO UPDATE SET name=EXCLUDED.name RETURNING id`
-    );
-    const employee = await client.query(
-      `INSERT INTO employees(employee_number,name,email,role,employee_type,department_id,status,annual_salary)
-       VALUES('UNRE-HR-001','HR Administrator',$1,'HR Administrator','Staff',$2,'Active',0)
-       ON CONFLICT(email) DO UPDATE SET department_id=EXCLUDED.department_id,status='Active' RETURNING id`,
-      [email, department.rows[0].id]
-    );
-    await client.query("UPDATE departments SET head_employee_id=$1 WHERE id=$2", [employee.rows[0].id, department.rows[0].id]);
-    const hash = await bcrypt.hash(process.env.ADMIN_PASSWORD, 12);
-    await client.query(
-      `INSERT INTO users(email,password_hash,role,employee_id) VALUES($1,$2,'hr',$3)
-       ON CONFLICT(email) DO UPDATE SET password_hash=EXCLUDED.password_hash,role='hr',employee_id=EXCLUDED.employee_id,active=true`,
-      [email, hash, employee.rows[0].id]
-    );
-    await client.query("COMMIT");
-  } catch (error) {
-    await client.query("ROLLBACK");
-    throw error;
-  } finally { client.release(); }
+  await seedAdminAccount(pool, email, process.env.ADMIN_PASSWORD);
 }
 if (require.main === module) {
   let server;

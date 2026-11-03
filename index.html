@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css?v=campus-backdrop-20261012" />
+  <link rel="stylesheet" href="styles.css?v=hr-workbench-20261103" />
   <link rel="icon" href="assets/unre-logo.jpg" type="image/jpeg" />
 </head>
 <body>
@@ -38,7 +38,7 @@
       <form id="login-form">
         <div class="field" id="hr-email-field">
           <label for="email">Work email</label>
-          <input id="email" type="email" autocomplete="username" value="hr@unre.ac.pg" required />
+          <input id="email" type="email" autocomplete="username" required />
         </div>
         <div class="field hidden" id="staff-email-field">
           <label for="staff-username">Username</label>
@@ -46,11 +46,11 @@
         </div>
         <div class="field">
           <label for="password">Password</label>
-          <input id="password" type="password" autocomplete="current-password" value="unre2026" required />
+          <input id="password" type="password" autocomplete="current-password" required />
         </div>
         <button class="btn btn-primary full" type="submit" id="login-btn">Enter HR office</button>
       </form>
-      <div class="hint" id="login-hint">HR demo: <strong>hr@unre.ac.pg</strong> / <strong>unre2026</strong></div>
+      <div class="hint" id="login-hint">Use your assigned HR account.</div>
     </div>
     </div>
   </div>
@@ -95,6 +95,7 @@
 
   <div id="modal" class="modal-back hidden"></div>
   <div id="toast" class="toast hidden"></div>
+  <script src="security.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

@@ -73,19 +73,30 @@ const SEED = {
     { id: "l2", employee: "Kevin Zhang", dept: "Computer Science", type: "Personal", start: "2026-09-15", end: "2026-09-16", note: "Personal appointment", status: "Approved" },
     { id: "l3", employee: "Emily Rodriguez", dept: "Biology", type: "Annual", start: "2026-09-20", end: "2026-09-27", note: "Family vacation", status: "Approved" },
     { id: "l4", employee: "Dr. Maria Santos", dept: "Biology", type: "Annual", start: "2026-09-08", end: "2026-09-18", note: "Conference and field leave", status: "Approved" },
-    { id: "l5", employee: "Peter Namaliu", dept: "Biology", type: "Emergency", start: "2026-08-22", end: "2026-08-23", note: "Family emergency", status: "Rejected" }
+    { id: "l5", employee: "Peter Namaliu", dept: "Biology", type: "Emergency", start: "2026-08-22", end: "2026-08-23", note: "Family emergency", status: "Rejected" },
+    { id: "l6", employee: "Dr. Sarah Chen", dept: "Computer Science", type: "Annual", start: "2026-10-19", end: "2026-10-23", note: "Research planning week", status: "Pending" },
+    { id: "l7", employee: "Dr. James Okonkwo", dept: "Mathematics", type: "Personal", start: "2026-10-26", end: "2026-10-27", note: "Family appointment", status: "Approved" },
+    { id: "l8", employee: "Dr. Robert Kim", dept: "Business Administration", type: "Sick", start: "2026-09-28", end: "2026-09-29", note: "Medical appointment", status: "Approved" },
+    { id: "l9", employee: "Michael Torres", dept: "Computer Science", type: "Annual", start: "2026-11-02", end: "2026-11-06", note: "Personal travel", status: "Pending" },
+    { id: "l10", employee: "Patricia Williams", dept: "Library Services", type: "Personal", start: "2026-09-07", end: "2026-09-07", note: "Records appointment", status: "Rejected" }
   ],
   jobs: [
     { id: "j1", title: "Academic Coordinator", dept: "Business Administration", status: "Draft", desc: "Coordinate academic programs, manage student records, and support department operations.", type: "Full-Time", band: "Staff", pay: "K55k–K65k", applicants: 0 },
     { id: "j2", title: "Visiting Lecturer — Statistics", dept: "Mathematics", status: "Open", desc: "One-year visiting position teaching undergraduate statistics courses.", type: "Contract", band: "Adjunct", pay: "K50k–K60k", applicants: 4 },
     { id: "j3", title: "Lab Technician", dept: "Biology", status: "Open", desc: "Manage biology teaching labs, prepare materials, and maintain equipment.", type: "Full-Time", band: "Staff", pay: "K48k–K55k", applicants: 4 },
-    { id: "j4", title: "Assistant Professor — Machine Learning", dept: "Computer Science", status: "Open", desc: "Tenure-track assistant professor specializing in machine learning and AI.", type: "Tenure-Track", band: "Faculty", pay: "K95k–K120k", applicants: 5 }
+    { id: "j4", title: "Assistant Professor — Machine Learning", dept: "Computer Science", status: "Open", desc: "Tenure-track assistant professor specializing in machine learning and AI.", type: "Tenure-Track", band: "Faculty", pay: "K95k–K120k", applicants: 5 },
+    { id: "j5", title: "Forest Resources Research Officer", dept: "Biology", status: "Open", desc: "Coordinate field data collection and support applied forestry research programmes.", type: "Full-Time", band: "Research", pay: "K62k–K72k", applicants: 0 }
   ],
   loans: [
     { id: "n1", employee: "Helen Kavo", dept: "Business Administration", kind: "Education", amount: 8500, term: 18, reason: "Postgraduate fees at UNRE", status: "Pending", salary: 54000 },
     { id: "n2", employee: "Peter Namaliu", dept: "Biology", kind: "Emergency", amount: 2500, term: 6, reason: "Medical costs for dependent", status: "Pending", salary: 48000 },
     { id: "n3", employee: "Kevin Zhang", dept: "Computer Science", kind: "Housing", amount: 18000, term: 24, reason: "Staff housing bond and relocation", status: "Approved", salary: 88000, repaid: 4500 },
-    { id: "n4", employee: "Grace Tovue", dept: "Computer Science", kind: "Salary advance", amount: 3000, term: 3, reason: "Advance against September payroll", status: "Rejected", salary: 69000 }
+    { id: "n4", employee: "Grace Tovue", dept: "Computer Science", kind: "Salary advance", amount: 3000, term: 3, reason: "Advance against September payroll", status: "Rejected", salary: 69000 },
+    { id: "n5", employee: "Dr. Sarah Chen", dept: "Computer Science", kind: "Housing", amount: 12000, term: 24, reason: "Staff housing repairs", status: "Approved", salary: 128000, repaid: 1000 },
+    { id: "n6", employee: "Dr. James Okonkwo", dept: "Mathematics", kind: "Education", amount: 6000, term: 12, reason: "Professional development course", status: "Pending", salary: 124000 },
+    { id: "n7", employee: "Dr. Robert Kim", dept: "Business Administration", kind: "Emergency", amount: 4000, term: 10, reason: "Urgent home repairs", status: "Approved", salary: 118000, repaid: 800 },
+    { id: "n8", employee: "Michael Torres", dept: "Computer Science", kind: "Salary advance", amount: 3500, term: 4, reason: "Unexpected relocation costs", status: "Rejected", salary: 98000 },
+    { id: "n9", employee: "Patricia Williams", dept: "Library Services", kind: "Education", amount: 5000, term: 12, reason: "Library information systems training", status: "Pending", salary: 72000 }
   ],
   applications: [
     { id: "a1", jobId: "j4", employee: "Michael Torres", employeeId: "e6", at: "2026-08-12", education: "PhD Computer Science, University of Queensland", experience: "Associate Professor, UNRE Computer Science — 6 years teaching software engineering and introductory ML.", statement: "I already convene CS electives and can take the machine-learning stream without a long handover.", status: "Pending" },
@@ -100,7 +111,10 @@ const SEED = {
     { id: "a10", jobId: "j2", employee: "David Park", employeeId: "e7", at: "2026-08-11", education: "MSc Statistics, University of Melbourne", experience: "Lecturer, UNRE Mathematics — undergraduate calculus and intro stats.", statement: "I already teach the service statistics stream and can cover the visiting load this year.", status: "Pending" },
     { id: "a11", jobId: "j2", employee: "Emily Rodriguez", employeeId: "e9", at: "2026-08-14", education: "MSc Biology; postgraduate teaching certificate", experience: "Visiting Lecturer, Biology — some quantitative ecology, not a stats specialist.", statement: "I can teach applied statistics for biology students on a one-year contract.", status: "Pending" },
     { id: "a12", jobId: "j2", employee: "Dr. Lillian Soso", employeeId: null, at: "2026-08-19", education: "PhD Statistics, University of Canterbury", experience: "Adjunct lecturer, Divine Word University — 5 years first-year statistics.", statement: "Available for a one-year visiting post; I have PNG undergraduate teaching experience.", status: "Pending" },
-    { id: "a13", jobId: "j2", employee: "Patricia Williams", employeeId: "e5", at: "2026-08-30", education: "MLIS Library Science", experience: "Head Librarian — information literacy workshops, not credit-bearing statistics.", statement: "I enjoy teaching workshops and would like to try a formal statistics class.", status: "Pending" }
+    { id: "a13", jobId: "j2", employee: "Patricia Williams", employeeId: "e5", at: "2026-08-30", education: "MLIS Library Science", experience: "Head Librarian — information literacy workshops, not credit-bearing statistics.", statement: "I enjoy teaching workshops and would like to try a formal statistics class.", status: "Pending" },
+    { id: "a14", jobId: "j4", employee: "Noah Iamo", employeeId: null, email: "n.iamo@example.org", at: "2026-09-18", education: "PhD Machine Learning, Australian National University", experience: "Postdoctoral researcher in crop-yield modelling and satellite imagery.", statement: "I would like to build applied machine-learning research focused on agriculture and environment data.", status: "Shortlisted", interviewAt: "2026-10-20T10:00" },
+    { id: "a15", jobId: "j3", employee: "Janet Kila", employeeId: null, email: "j.kila@example.org", at: "2026-09-21", education: "BSc Biology, UNRE", experience: "Graduate intern in laboratory sample preparation and safety.", statement: "I am ready to support teaching practicals and lab operations.", status: "Interviewed", interviewAt: "2026-10-16T13:30" },
+    { id: "a16", jobId: "j2", employee: "Dr. Numa Beva", employeeId: null, email: "n.beva@example.org", at: "2026-09-25", education: "PhD Statistics, University of Canterbury", experience: "Five years teaching first-year statistics in Papua New Guinea.", statement: "I can support the undergraduate statistics programme as a visiting lecturer.", status: "Accepted" }
   ],
   documents: [
     { id: "f1", employeeId: "e1", kind: "Resume", name: "Chen_academic_CV.pdf", uploadedAt: "2026-03-04", updatedAt: "2026-08-18", mime: "text/html", body: "Curriculum vitae — Dr. Sarah Chen, Professor & Head, Computer Science, UNRE. PhD in computing; teaching and applied GIS for agriculture." },
@@ -127,22 +141,75 @@ const SEED = {
     { id: "at1", employeeId: "e1", date: "2026-09-14", status: "Present", note: "Campus attendance" },
     { id: "at2", employeeId: "e6", date: "2026-09-14", status: "Present", note: "Campus attendance" },
     { id: "at3", employeeId: "e7", date: "2026-09-14", status: "On Leave", note: "Approved leave" },
-    { id: "at4", employeeId: "e10", date: "2026-09-14", status: "Present", note: "Campus attendance" }
+    { id: "at4", employeeId: "e10", date: "2026-09-14", status: "Present", note: "Campus attendance" },
+    { id: "at5", employeeId: "e1", date: "2026-10-12", status: "Present", note: "Campus attendance" },
+    { id: "at6", employeeId: "e2", date: "2026-10-12", status: "Remote", note: "Approved field planning" },
+    { id: "at7", employeeId: "e4", date: "2026-10-12", status: "Absent", note: "Awaiting HR follow-up" },
+    { id: "at8", employeeId: "e5", date: "2026-10-12", status: "Present", note: "Library services" },
+    { id: "at9", employeeId: "e6", date: "2026-10-12", status: "Present", note: "Campus attendance" },
+    { id: "at10", employeeId: "e8", date: "2026-10-12", status: "Remote", note: "Research work" },
+    { id: "at11", employeeId: "e9", date: "2026-10-12", status: "Present", note: "Teaching roster" },
+    { id: "at12", employeeId: "e10", date: "2026-10-12", status: "Present", note: "HR office" },
+    { id: "at13", employeeId: "e11", date: "2026-10-12", status: "On Leave", note: "Approved leave" },
+    { id: "at14", employeeId: "e12", date: "2026-10-12", status: "Present", note: "Research office" }
   ],
   tasks: [
     { id: "t1", title: "Prepare September payroll review", description: "Confirm employee changes and allowances before payroll sign-off.", employeeId: "e10", status: "In Progress", priority: "High", startDate: "2026-09-21", dueDate: "2026-09-30" },
     { id: "t2", title: "Update laboratory safety files", description: "Collect the current safety certificates for Biology laboratory staff.", employeeId: "e11", status: "New", priority: "Normal", startDate: "2026-09-25", dueDate: "2026-10-05" },
     { id: "t3", title: "Review annual leave balances", description: "Check approved leave records against the current staff register.", employeeId: "e10", status: "Pending", priority: "Normal", startDate: "2026-09-14", dueDate: "2026-09-25" },
-    { id: "t4", title: "Submit field research progress summary", description: "Prepare a concise update for the Computer Science applied research meeting.", employeeId: "e12", status: "Done", priority: "Low", startDate: "2026-09-10", dueDate: "2026-09-20" }
+    { id: "t4", title: "Submit field research progress summary", description: "Prepare a concise update for the Computer Science applied research meeting.", employeeId: "e12", status: "Done", priority: "Low", startDate: "2026-09-10", dueDate: "2026-09-20" },
+    { id: "t5", title: "Confirm October lecture cover", description: "Coordinate course coverage before the approved October leave period.", employeeId: "e1", status: "New", priority: "High", startDate: "2026-10-13", dueDate: "2026-10-16" },
+    { id: "t6", title: "Review statistics assessment plan", description: "Check assessment dates and moderation requirements for semester courses.", employeeId: "e2", status: "In Progress", priority: "Normal", startDate: "2026-10-08", dueDate: "2026-10-20" },
+    { id: "t7", title: "Complete faculty budget notes", description: "Submit planned teaching and research costs for the next budget review.", employeeId: "e4", status: "Pending", priority: "Normal", startDate: "2026-10-01", dueDate: "2026-10-22" },
+    { id: "t8", title: "Refresh library access register", description: "Verify staff access to electronic journals and update records.", employeeId: "e5", status: "Done", priority: "Low", startDate: "2026-10-01", dueDate: "2026-10-09" },
+    { id: "t9", title: "Review teaching lab stock", description: "Reconcile Biology laboratory supplies before practical classes begin.", employeeId: "e11", status: "In Progress", priority: "High", startDate: "2026-10-10", dueDate: "2026-10-19" }
   ],
   contracts: [
     { id: "c1", employeeId: "e1", employee: "Dr. Sarah Chen", department: "Computer Science", type: "Academic appointment", start: "2025-01-01", end: "2026-12-31", status: "Renewing", workPermitNumber: "", workPermitExpiry: "", visaType: "", visaExpiry: "", documentId: "", notes: "Renewal review in progress." },
     { id: "c2", employeeId: "e9", employee: "Emily Rodriguez", department: "Biology", type: "Visiting lecturer", start: "2026-01-01", end: "2026-12-31", status: "Active", workPermitNumber: "WP-DEMO-104", workPermitExpiry: "2026-11-15", visaType: "Work visa", visaExpiry: "2026-11-15", documentId: "", notes: "Demo record; verify original documents." },
-    { id: "c3", employeeId: "e12", employee: "Grace Tovue", department: "Computer Science", type: "Research fellowship", start: "2026-02-01", end: "2027-01-31", status: "Active", workPermitNumber: "", workPermitExpiry: "", visaType: "", visaExpiry: "", documentId: "", notes: "" }
+    { id: "c3", employeeId: "e12", employee: "Grace Tovue", department: "Computer Science", type: "Research fellowship", start: "2026-02-01", end: "2027-01-31", status: "Active", workPermitNumber: "", workPermitExpiry: "", visaType: "", visaExpiry: "", documentId: "", notes: "" },
+    { id: "c4", employeeId: "e2", employee: "Dr. James Okonkwo", department: "Mathematics", type: "Academic appointment", start: "2025-01-01", end: "2026-12-31", status: "Active", workPermitNumber: "", workPermitExpiry: "", visaType: "", visaExpiry: "", documentId: "", notes: "Annual appointment review due in December." },
+    { id: "c5", employeeId: "e4", employee: "Dr. Robert Kim", department: "Business Administration", type: "Academic appointment", start: "2024-07-01", end: "2027-06-30", status: "Active", workPermitNumber: "", workPermitExpiry: "", visaType: "", visaExpiry: "", documentId: "", notes: "Department head appointment." }
+  ],
+  roster: [
+    { id: "r1", employeeId: "e1", startDate: "2026-07-01", endDate: "2026-12-31", start: "08:00", end: "16:00", breakMinutes: 45 },
+    { id: "r2", employeeId: "e2", startDate: "2026-07-01", endDate: "2026-12-31", start: "08:30", end: "16:30", breakMinutes: 45 },
+    { id: "r3", employeeId: "e5", startDate: "2026-10-12", endDate: "2026-10-25", start: "08:00", end: "16:30", breakMinutes: 30 },
+    { id: "r4", employeeId: "e9", startDate: "2026-10-12", endDate: "2026-10-25", start: "09:00", end: "15:00", breakMinutes: 30 },
+    { id: "r5", employeeId: "e11", startDate: "2026-10-12", endDate: "2026-10-25", start: "07:30", end: "16:00", breakMinutes: 45 }
+  ],
+  overtime: [
+    { id: "ot1", employeeId: "e1", date: "2026-10-08", hours: 2, multiplier: 1.5, reason: "Research seminar" },
+    { id: "ot2", employeeId: "e2", date: "2026-10-09", hours: 1.5, multiplier: 1.5, reason: "Assessment moderation" },
+    { id: "ot3", employeeId: "e5", date: "2026-10-10", hours: 3, multiplier: 1.5, reason: "Library systems migration" },
+    { id: "ot4", employeeId: "e10", date: "2026-10-11", hours: 2.5, multiplier: 2, reason: "Payroll close on public holiday" },
+    { id: "ot5", employeeId: "e11", date: "2026-10-07", hours: 2, multiplier: 1.5, reason: "Prepare teaching laboratory" }
+  ],
+  payroll: [
+    { id: "pay1", employeeId: "e1", employee: "Dr. Sarah Chen", department: "Computer Science", period: "2026-10-01", payDate: "2026-10-30", basicSalary: 10666.67, housingAllowance: 500, bonus: 0, overtime: 220, gross: 11386.67, nasfund: 640, tax: 2461.25, loan: 0, otherDeductions: 100, net: 8185.42, totalDays: 31, workingDays: 22, status: "Completed" },
+    { id: "pay2", employeeId: "e2", employee: "Dr. James Okonkwo", department: "Mathematics", period: "2026-10-01", payDate: "2026-10-30", basicSalary: 10333.33, housingAllowance: 400, bonus: 250, overtime: 180, gross: 11163.33, nasfund: 620, tax: 2395, loan: 0, otherDeductions: 0, net: 8148.33, totalDays: 31, workingDays: 22, status: "Pending" },
+    { id: "pay3", employeeId: "e4", employee: "Dr. Robert Kim", department: "Business Administration", period: "2026-10-01", payDate: "2026-10-30", basicSalary: 9833.33, housingAllowance: 350, bonus: 0, overtime: 0, gross: 10183.33, nasfund: 590, tax: 2212.5, loan: 0, otherDeductions: 75, net: 7305.83, totalDays: 31, workingDays: 22, status: "Pending" },
+    { id: "pay4", employeeId: "e5", employee: "Patricia Williams", department: "Library Services", period: "2026-10-01", payDate: "2026-10-30", basicSalary: 6000, housingAllowance: 250, bonus: 150, overtime: 155, gross: 6555, nasfund: 360, tax: 862.5, loan: 0, otherDeductions: 0, net: 5332.5, totalDays: 31, workingDays: 22, status: "Completed" },
+    { id: "pay5", employeeId: "e6", employee: "Michael Torres", department: "Computer Science", period: "2026-10-01", payDate: "2026-10-30", basicSalary: 8166.67, housingAllowance: 300, bonus: 0, overtime: 0, gross: 8466.67, nasfund: 490, tax: 1678.75, loan: 0, otherDeductions: 50, net: 6247.92, totalDays: 31, workingDays: 22, status: "Pending" }
+  ],
+  notifications: [
+    { id: "demo-n1", title: "Leave request awaiting review", message: "Dr. Sarah Chen submitted annual leave for 19-23 October.", createdAt: "2026-10-12", recipientRole: "hr", type: "request-status", read: false, targetPage: "leave" },
+    { id: "demo-n2", title: "Payroll ready for review", message: "October payroll for Dr. James Okonkwo is pending approval.", createdAt: "2026-10-12", recipientRole: "hr", type: "request-status", read: false, targetPage: "payroll" },
+    { id: "demo-n3", title: "Loan application received", message: "Patricia Williams submitted an education loan request.", createdAt: "2026-10-11", recipientRole: "hr", type: "request-status", read: false, targetPage: "loans" },
+    { id: "demo-n4", title: "Task assigned", message: "Confirm October lecture cover is due 16 October.", createdAt: "2026-10-13", employeeId: "e1", type: "request-status", read: false, targetPage: "tasks" },
+    { id: "demo-n5", title: "Task assigned", message: "Review statistics assessment plan is in progress.", createdAt: "2026-10-13", employeeId: "e2", type: "request-status", read: false, targetPage: "tasks" }
+  ],
+  auditLogs: [
+    { id: "demo-audit-1", actor: "hr@unre.ac.pg", action: "create", resource: "employee", resourceId: "e1", metadata: { employee: "Dr. Sarah Chen" }, createdAt: "2026-10-08T09:00:00.000Z" },
+    { id: "demo-audit-2", actor: "hr@unre.ac.pg", action: "update", resource: "leave", resourceId: "l2", metadata: { status: "Approved", employee: "Kevin Zhang" }, createdAt: "2026-10-09T10:30:00.000Z" },
+    { id: "demo-audit-3", actor: "hr@unre.ac.pg", action: "create", resource: "payroll", resourceId: "pay1", metadata: { employee: "Dr. Sarah Chen", period: "2026-10" }, createdAt: "2026-10-10T11:00:00.000Z" },
+    { id: "demo-audit-4", actor: "hr@unre.ac.pg", action: "update", resource: "loan", resourceId: "n3", metadata: { status: "Approved", employee: "Kevin Zhang" }, createdAt: "2026-10-11T12:15:00.000Z" },
+    { id: "demo-audit-5", actor: "hr@unre.ac.pg", action: "create", resource: "job", resourceId: "j5", metadata: { title: "Forest Resources Research Officer" }, createdAt: "2026-10-12T08:45:00.000Z" }
   ]
 };
 
 const KEY = "unre-hr-v4";
+const DEMO_SEED_VERSION = 4;
 const DEMO_PASS = "unre2026";
 const configuredApiBase = document.querySelector("meta[name='unre-api-base']")?.content;
 // Directly opened files have no API origin, so use the local demo automatically.
@@ -156,8 +223,8 @@ const API_BASE = (configuredApiBase || "/api").replace(/\/$/, "");
 let csrfToken = null;
 let state = load();
 let viewMode = {
-  employees: "All", employeeStatus: "All", employeeDept: "All", employeeView: "cards", employeePage: 1,
-  leave: "list", leaveQuery: "", leaveStatus: "All", leaveType: "All", leavePage: 1,
+  employees: "All", employeeStatus: "All", employeeDept: "All", employeeView: "list", employeePage: 1,
+  leave: "calendar", leaveQuery: "", leaveStatus: "All", leaveType: "All", leavePage: 1,
   leaveMonth: "", portal: "hr", attendanceMonth: todayIso().slice(0, 7),
   attendanceQuery: "", attendanceDept: "All", attendanceDate: todayIso(), payrollPeriod: todayIso().slice(0, 7),
   taskView: "board", taskQuery: "", taskStatus: "All", taskDept: "All", taskMonth: todayIso().slice(0, 7),
@@ -189,12 +256,36 @@ function load() {
       }
       if (!Array.isArray(data.contracts)) data.contracts = structuredClone(SEED.contracts);
       if (!Array.isArray(data.auditLogs)) data.auditLogs = [];
+      if (!Array.isArray(data.roster)) data.roster = [];
+      if (!Array.isArray(data.overtime)) data.overtime = [];
+      if (!Array.isArray(data.employmentHistory)) data.employmentHistory = [];
+      if (Number(data.demoSeedVersion || 0) < DEMO_SEED_VERSION) {
+        const seedCollections = ["leave", "loans", "attendance", "tasks", "contracts", "roster", "overtime", "payroll", "notifications", "jobs", "applications", "auditLogs"];
+        seedCollections.forEach((key) => {
+          const records = Array.isArray(data[key]) ? data[key] : [];
+          const identities = new Set(records.map((record) => key === "attendance"
+            ? `${record.employeeId}:${record.date}`
+            : key === "payroll" ? `${record.employeeId}:${String(record.period || "").slice(0, 7)}` : record.id));
+          SEED[key].forEach((record) => {
+            const identity = key === "attendance" ? `${record.employeeId}:${record.date}`
+              : key === "payroll" ? `${record.employeeId}:${String(record.period || "").slice(0, 7)}` : record.id;
+            if (!identities.has(identity)) records.push(structuredClone(record));
+          });
+          data[key] = records;
+        });
+        const demoApplicationIds = new Set(["a14", "a15", "a16"]);
+        data.applications = data.applications.map((application) => {
+          const seedApplication = SEED.applications.find((record) => record.id === application.id);
+          return demoApplicationIds.has(application.id) && seedApplication ? structuredClone(seedApplication) : application;
+        });
+        data.demoSeedVersion = DEMO_SEED_VERSION;
+      }
 
       return data;
     }
   } catch (_) {}
   const initial = structuredClone(SEED);
-  initial.notifications = [];
+  initial.demoSeedVersion = DEMO_SEED_VERSION;
   return initial;
 }
 function save() { if (DEMO_MODE) localStorage.setItem(KEY, JSON.stringify(state)); }
@@ -233,7 +324,7 @@ function fromApiAudit(row) {
 }
 function fromApiUser(row) {
   return { id: row.id, email: row.email, role: row.role, active: row.active, employeeId: row.employee_id,
-    employeeName: row.employee_name || "" };
+    employeeName: row.employee_name || "", employeeStatus: row.employee_status || "" };
 }
 function fromApiLeave(row) {
   const employee = state.employees.find((item) => item.id === row.employee_id);
@@ -245,10 +336,26 @@ function fromApiAttendance(row) {
   return { id: row.id, employeeId: row.employee_id, date: row.attendance_date?.slice(0, 10),
     status: row.status, note: row.note || "" };
 }
+function fromApiRoster(row) {
+  return { id: row.id, employeeId: row.employee_id, startDate: row.starts_on?.slice(0, 10),
+    endDate: row.ends_on?.slice(0, 10), start: row.start_time?.slice(0, 5), end: row.end_time?.slice(0, 5),
+    breakMinutes: Number(row.break_minutes || 0) };
+}
+function fromApiOvertime(row) {
+  return { id: row.id, employeeId: row.employee_id, date: row.overtime_date?.slice(0, 10),
+    hours: Number(row.hours), multiplier: Number(row.multiplier), reason: row.reason || "" };
+}
+function fromApiEmploymentHistory(row) {
+  return { id: row.id, employeeId: row.employee_id, applicationId: row.application_id, previousRole: row.previous_role || "",
+    previousType: row.previous_employee_type || "", previousDepartment: row.previous_department || "",
+    previousSalary: row.previous_annual_salary === null ? null : Number(row.previous_annual_salary),
+    newRole: row.new_role, newType: row.new_employee_type || "", newDepartment: row.new_department || "",
+    newSalary: Number(row.new_annual_salary), effectiveOn: row.effective_on?.slice(0, 10) || "" };
+}
 function fromApiLoan(row) {
   const employee = state.employees.find((item) => item.id === row.employee_id);
   return { id: row.id, employee: employee?.name || row.employee_name, employeeId: row.employee_id,
-    dept: employee?.dept || "", kind: row.purpose || "Staff loan", amount: Number(row.amount),
+    dept: employee?.dept || "", kind: row.loan_type || "Staff loan", amount: Number(row.amount),
     term: Number(row.term_months), reason: row.purpose || "", repaid: Number(row.repaid || 0), status: row.status };
 }
 function fromApiPayroll(row) {
@@ -314,17 +421,22 @@ async function loadCoreFromApi() {
   const [employees, departments, attendance, loans, payroll] = await Promise.all(requests);
   const leave = await apiRequest("/leave");
   const reportYear = viewMode.reportYear || todayIso().slice(0, 4);
-  const [jobs, applications, documents, notifications, tasks, contracts, users, auditLogs, workforceReport] = await Promise.all([
+  const [jobs, applications, documents, notifications, tasks, contracts, users, auditLogs, workforceReport, roster, overtime, employmentHistory] = await Promise.all([
     apiRequest("/jobs"), apiRequest("/applications"), apiRequest("/documents"), apiRequest("/notifications"), apiRequest("/tasks"),
     isHr() ? apiRequest("/contracts") : Promise.resolve({ data: [] }),
     isHr() ? apiRequest("/users") : Promise.resolve({ data: [] }),
     isHr() ? apiRequest("/audit-logs?limit=100") : Promise.resolve({ data: [] }),
-    isLeader() ? apiRequest(`/reports/workforce?year=${encodeURIComponent(reportYear)}`) : Promise.resolve(null)
+    isLeader() ? apiRequest(`/reports/workforce?year=${encodeURIComponent(reportYear)}`) : Promise.resolve(null),
+    isHr() ? apiRequest("/roster") : Promise.resolve({ data: [] }),
+    isHr() ? apiRequest("/overtime") : Promise.resolve({ data: [] }),
+    session?.employeeId ? apiRequest(`/employees/${encodeURIComponent(session.employeeId)}/employment-history`) : Promise.resolve({ data: [] })
   ]);
   state.employees = (employees.data || []).map(fromApiEmployee);
   state.departments = (departments.data || []).map((row) => ({
     id: row.id, name: row.name, code: row.code, description: row.description || "",
-    blurb: row.description || "", location: row.location || "", head: row.head_employee_id || ""
+    blurb: row.description || "", location: row.location || "",
+    head: state.employees.find((employee) => employee.id === row.head_employee_id)?.name || "",
+    headEmployeeId: row.head_employee_id || ""
   }));
   state.leave = (leave.data || []).map(fromApiLeave);
   state.attendance = (attendance.data || []).map(fromApiAttendance);
@@ -336,6 +448,9 @@ async function loadCoreFromApi() {
   state.notifications = (notifications.data || []).map(fromApiNotification);
   state.tasks = (tasks.data || []).map(fromApiTask);
   state.contracts = (contracts.data || []).map(fromApiContract);
+  state.roster = (roster.data || []).map(fromApiRoster);
+  state.overtime = (overtime.data || []).map(fromApiOvertime);
+  state.employmentHistory = (employmentHistory.data || []).map(fromApiEmploymentHistory);
   state.users = (users.data || []).map(fromApiUser);
   state.auditLogs = (auditLogs.data || []).map(fromApiAudit);
   if (workforceReport) state.workforceReport = workforceReport;
@@ -556,7 +671,7 @@ function todayIso() {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 function esc(s) {
-  return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  return escapeHtml(s);
 }
 function fileSizeLabel(n) {
   if (!n) return "";
@@ -730,9 +845,15 @@ function shiftMonthIso(iso, amount) {
 }
 
 function addMonthsIso(iso, months) {
-  const date = new Date(`${iso}T00:00:00`);
-  date.setMonth(date.getMonth() + months);
+  const [year, month, day] = iso.split("-").map(Number);
+  const targetMonth = new Date(year, month - 1 + months, 1);
+  const lastDay = new Date(targetMonth.getFullYear(), targetMonth.getMonth() + 1, 0).getDate();
+  const date = new Date(targetMonth.getFullYear(), targetMonth.getMonth(), Math.min(day, lastDay));
   return formatLocalIso(date);
+}
+
+function semesterRosterEnd(startDate) {
+  return addDaysIso(addMonthsIso(startDate, 6), -1);
 }
 
 function formatLocalIso(date) {
@@ -743,8 +864,9 @@ function formatLocalIso(date) {
 }
 
 function rosterPeriodLabel(shift) {
-  const employee = state.employees.find((e) => e.id === shift.employeeId);
-  return isTeachingRosterEmployee(employee) ? "Semester roster" : "Two-week roster";
+  if (shift.endDate === semesterRosterEnd(shift.startDate)) return "Semester roster";
+  if (shift.endDate === addDaysIso(shift.startDate, 13)) return "Two-week roster";
+  return "Custom roster";
 }
 
 function overtimeRecords() {
@@ -1345,7 +1467,8 @@ const ACCESS_ROLE_LABELS = { hr: "HR", dean: "Dean", hod: "Head of Department", 
 function roleAuditUsers() {
   if (!DEMO_MODE) return state.users || [];
   return [{ id: "demo-hr", email: "hr@unre.ac.pg", role: "hr", active: true, employeeName: "HR Administrator" },
-    ...(state.employees || []).map((employee) => ({ id: employee.id, email: employee.email, role: employee.accessRole || "staff", active: true, employeeId: employee.id, employeeName: employee.name }))];
+    ...(state.employees || []).map((employee) => ({ id: employee.id, email: employee.email, role: employee.accessRole || "staff",
+      active: employee.accountActive !== false, employeeStatus: employee.status, employeeId: employee.id, employeeName: employee.name }))];
 }
 
 function roleAuditEntries() {
@@ -1362,7 +1485,7 @@ function renderRolesAudit() {
     <div class="page-head"><div><span class="eyebrow">GOVERNANCE</span><h2>Roles &amp; audit</h2><p>Manage account access and review recent changes to HR records.</p></div></div>
     <section class="card role-register"><div class="card-heading"><div><span class="eyebrow">ACCESS CONTROL</span><h3>User roles</h3><p class="meta">HR has full operational access. Leadership roles are limited to aggregate workforce reports.</p></div></div>
       <div class="attendance-table-wrap"><table class="plain"><thead><tr><th>Account</th><th>Person</th><th>Role</th><th>Status</th></tr></thead><tbody>
-        ${users.map((user) => `<tr><td>${esc(user.email)}</td><td>${esc(user.employeeName || "—")}</td><td><select class="compact-select role-select" data-user-role="${esc(user.id)}" aria-label="Access role for ${esc(user.email)}"${user.id === session?.id || user.email === session?.email ? " disabled" : ""}>${ACCESS_ROLES.map((role) => `<option value="${role}"${role === user.role ? " selected" : ""}>${ACCESS_ROLE_LABELS[role]}</option>`).join("")}</select></td><td>${badge(user.active === false ? "Inactive" : "Active")}</td></tr>`).join("") || `<tr><td colspan="4"><div class="empty">No user accounts found.</div></td></tr>`}
+        ${users.map((user) => `<tr><td>${esc(user.email)}</td><td>${esc(user.employeeName || "—")}</td><td><select class="compact-select role-select" data-user-role="${esc(user.id)}" aria-label="Access role for ${esc(user.email)}"${user.id === session?.id || user.email === session?.email ? " disabled" : ""}>${ACCESS_ROLES.map((role) => `<option value="${role}"${role === user.role ? " selected" : ""}>${ACCESS_ROLE_LABELS[role]}</option>`).join("")}</select></td><td><div class="row-between">${badge(user.active === false ? "Inactive" : "Active")}<button type="button" class="btn btn-ghost" data-user-active="${esc(user.id)}" data-active="${user.active === false ? "false" : "true"}"${user.id === session?.id || user.email === session?.email || (user.active === false && user.employeeStatus === "Inactive") ? " disabled" : ""}>${user.active === false ? "Activate" : "Deactivate"}</button></div></td></tr>`).join("") || `<tr><td colspan="4"><div class="empty">No user accounts found.</div></td></tr>`}
       </tbody></table></div>
     </section>
     <section class="card access-matrix"><div class="card-heading"><div><span class="eyebrow">PERMISSIONS</span><h3>Access by role</h3></div></div>
@@ -1385,6 +1508,7 @@ function renderRolesAudit() {
 function renderDashboard() {
   const pendingLeave = state.leave.filter((l) => l.status === "Pending");
   const pendingLoans = state.loans.filter((l) => l.status === "Pending");
+  const pendingPayroll = (state.payroll || []).filter((record) => record.status === "Pending").length;
   const openJobs = state.jobs.filter(jobAccepting);
   const onLeave = state.employees.filter((e) => e.status === "On Leave").length;
   const activeEmployees = state.employees.filter((e) => e.status === "Active").length;
@@ -1400,10 +1524,10 @@ function renderDashboard() {
     String(record.period || "").slice(0, 4) === payrollYear && record.status !== "Rejected"
   );
   const payParts = [
-    { label: "Basic salary", key: "basicSalary", color: "#6078ed" },
-    { label: "Housing allowance", key: "housingAllowance", color: "#22a47b" },
-    { label: "Bonus", key: "bonus", color: "#e99a36" },
-    { label: "Overtime", key: "overtime", color: "#3099c7" }
+    { label: "Basic salary", key: "basicSalary", color: "#d10b25" },
+    { label: "Housing allowance", key: "housingAllowance", color: "#e5a900" },
+    { label: "Bonus", key: "bonus", color: "#252525" },
+    { label: "Overtime", key: "overtime", color: "#888680" }
   ].map((part) => ({ ...part, amount: payroll.reduce((sum, record) => sum + Number(record[part.key] || 0), 0) }));
   const payTotal = payParts.reduce((sum, part) => sum + part.amount, 0);
   let payOffset = 0;
@@ -1433,9 +1557,10 @@ function renderDashboard() {
     ...department, count: state.employees.filter((employee) => employee.dept === department.name).length
   })).sort((a, b) => b.count - a.count);
   const notifications = notificationsForSession();
+  const reviewCount = pendingLeave.length + pendingLoans.length + pendingApplications.length + pendingPayroll;
   return `
     <div class="page-head"><div><span class="eyebrow">HR OFFICE · VUDAL CAMPUS</span><h2>Dashboard</h2><p>Your workforce overview and the latest HR activity.</p></div>
-      <button class="btn btn-primary" data-open="employee">${ICONS.people}<span>Add employee</span></button></div>
+      <div class="dashboard-header-actions"><button class="btn btn-ghost" data-open="payroll">${ICONS.pay}<span>Process payroll</span></button><button class="btn btn-primary" data-open="employee">${ICONS.people}<span>Add employee</span></button></div></div>
     <div class="stats dashboard-stats">
       <div class="stat"><div class="k">Total employees <span class="icon-chip ic-p">${ICONS.people}</span></div><div class="n">${state.employees.length}</div><div class="s">Across ${state.departments.length} departments</div></div>
       <div class="stat"><div class="k">Active staff <span class="icon-chip ic-g">${ICONS.people}</span></div><div class="n">${activeEmployees}</div><div class="s">Currently active</div></div>
@@ -1444,6 +1569,15 @@ function renderDashboard() {
       <div class="stat"><div class="k">Applications <span class="icon-chip ic-r">${ICONS.people}</span></div><div class="n">${applications.length}</div><div class="s">${pendingApplications.length} need review</div></div>
       <div class="stat"><div class="k">Payroll net · this month <span class="icon-chip ic-g">${ICONS.pay}</span></div><div class="n dashboard-stat-money">${kina(currentMonthNet)}</div><div class="s">${payrollThisMonth.length} entries · pending and completed</div></div>
     </div>
+    <section class="dashboard-work-queue" aria-label="HR work queue">
+      <div class="dashboard-queue-heading"><div><span class="eyebrow">WORK QUEUE</span><h3>Needs your review</h3></div><span class="queue-total">${reviewCount} item${reviewCount === 1 ? "" : "s"}</span></div>
+      <div class="dashboard-queue-grid">
+        <button type="button" class="dashboard-queue-item" data-go="leave"><span class="queue-icon ic-o">${ICONS.leave}</span><span class="queue-copy"><strong>Leave requests</strong><small>Approval pending</small></span><strong class="queue-count">${pendingLeave.length}</strong><span class="queue-arrow" aria-hidden="true">›</span></button>
+        <button type="button" class="dashboard-queue-item" data-go="loans"><span class="queue-icon ic-g">${ICONS.loans}</span><span class="queue-copy"><strong>Loan applications</strong><small>Decision pending</small></span><strong class="queue-count">${pendingLoans.length}</strong><span class="queue-arrow" aria-hidden="true">›</span></button>
+        <button type="button" class="dashboard-queue-item" data-go="jobs"><span class="queue-icon ic-b">${ICONS.jobs}</span><span class="queue-copy"><strong>Applications</strong><small>Candidate review</small></span><strong class="queue-count">${pendingApplications.length}</strong><span class="queue-arrow" aria-hidden="true">›</span></button>
+        <button type="button" class="dashboard-queue-item" data-go="payroll"><span class="queue-icon ic-p">${ICONS.pay}</span><span class="queue-copy"><strong>Payroll</strong><small>Awaiting finalisation</small></span><strong class="queue-count">${pendingPayroll}</strong><span class="queue-arrow" aria-hidden="true">›</span></button>
+      </div>
+    </section>
     <div class="dashboard-overview">
       <section class="card dashboard-pay-history">
         <div class="card-heading"><div><span class="eyebrow">PAY HISTORY</span><h3>Monthly payroll</h3></div>
@@ -1515,7 +1649,7 @@ function renderDashboard() {
           </div>`).join("") : `<div class="empty">No new notifications.</div>`}
       </section>
       <section class="card dashboard-loans"><div class="card-heading"><div><span class="eyebrow">STAFF SUPPORT</span><h3>Loans awaiting decision</h3></div><button class="link" data-go="loans">Review →</button></div>
-        ${pendingLoans.length ? pendingLoans.map((l) => `<div class="leave-mini"><div><strong>${l.employee}</strong><div class="meta">${l.kind} · ${kina(l.amount)} · ${l.term} months</div></div>${badge(l.status)}</div>`).join("") : `<div class="empty">No loan files in the queue.</div>`}
+        ${pendingLoans.length ? pendingLoans.map((l) => `<div class="leave-mini"><div><strong>${esc(l.employee)}</strong><div class="meta">${esc(l.kind)} · ${kina(l.amount)} · ${l.term} months</div></div>${badge(l.status)}</div>`).join("") : `<div class="empty">No loan files in the queue.</div>`}
       </section>
     </div>`;
 }
@@ -1651,9 +1785,9 @@ function renderDepartments() {
       return `
       <article class="dept clickable" data-dept="${d.id}" role="button" tabindex="0">
         <div class="icon-chip ic-g">${ICONS.depts}</div>
-        <h3 style="margin:12px 0 4px">${d.name}</h3><div class="meta">${d.code}</div><p class="meta">${d.blurb}</p>
-        <div class="kv"><span>${n} members</span><span>${d.location}</span></div>
-        <div class="meta" style="margin-top:8px">Head: ${d.head}</div>
+        <h3 style="margin:12px 0 4px">${esc(d.name)}</h3><div class="meta">${esc(d.code)}</div><p class="meta">${esc(d.blurb)}</p>
+        <div class="kv"><span>${n} members</span><span>${esc(d.location)}</span></div>
+        <div class="meta" style="margin-top:8px">Head: ${esc(d.head)}</div>
         <div class="meta hint-click">Open description &amp; staff</div></article>`;
     }).join("")}</div>`;
 }
@@ -1728,12 +1862,12 @@ function leaveCard(l, canDecide) {
   const employee = state.employees.find((e) => e.name === l.employee);
   return `
     <article class="person"><div class="row-between"><div class="person-top">${employeeAvatarHtml(employee || l.employee)}
-      <div><strong>${l.employee}</strong><div class="meta">${l.dept}</div></div></div>${badge(l.status)}</div>
-      <div class="kv"><span>Type ${l.type}</span><span>Start ${l.start}</span><span>End ${l.end}</span></div>
-      <p class="meta">${l.note}</p>
+      <div><strong>${esc(l.employee)}</strong><div class="meta">${esc(l.dept)}</div></div></div>${badge(l.status)}</div>
+      <div class="kv"><span>Type ${esc(l.type)}</span><span>Start ${esc(l.start)}</span><span>End ${esc(l.end)}</span></div>
+      <p class="meta">${esc(l.note)}</p>
       ${canDecide && l.status === "Pending" ? `<div class="actions">
-        <button class="btn btn-ok" data-leave="${l.id}" data-act="Approved">Approve</button>
-        <button class="btn btn-danger" data-leave="${l.id}" data-act="Rejected">Reject</button></div>` : ""}
+        <button class="btn btn-ok" data-leave="${esc(l.id)}" data-act="Approved">Approve</button>
+        <button class="btn btn-danger" data-leave="${esc(l.id)}" data-act="Rejected">Reject</button></div>` : ""}
     </article>`;
 }
 
@@ -1898,9 +2032,9 @@ function loanCard(l, canDecide) {
   const pct = l.status === "Approved" ? Math.min(100, ((l.repaid || 0) / l.amount) * 100) : 0;
   const instal = l.status === "Approved" && remaining > 0 ? loanMonthly(l) : 0;
   return `
-    <article class="loan"><div class="row-between"><div><strong>${l.employee}</strong><div class="meta">${l.dept} · ${l.kind}</div></div>${badge(l.status)}</div>
+    <article class="loan"><div class="row-between"><div><strong>${esc(l.employee)}</strong><div class="meta">${esc(l.dept)} · ${esc(l.kind)}</div></div>${badge(l.status)}</div>
       <div class="kv"><span>${kina(l.amount)}</span><span>${l.term} months</span>${emp && isHr() ? `<span>Salary ${kina(emp.salary)}</span>` : ""}</div>
-      <p class="meta">${l.reason}</p>
+      <p class="meta">${esc(l.reason)}</p>
       ${l.status === "Approved" ? `<div class="bar" style="margin-top:10px"><span style="width:${pct}%"></span></div>
         <div class="meta">Repaid ${kina(l.repaid || 0)} · remaining ${kina(remaining)}${instal ? ` · payroll ${kina2(instal)}/month` : ""}</div>` : ""}
       ${canDecide && l.status === "Pending" ? `<p class="meta">${check.ok ? "Passes policy check." : check.reason}</p>
@@ -2042,7 +2176,7 @@ function renderPayslip() {
       <div class="card">
         <h3>Employer side</h3>
         <p class="meta">UNRE also remits NASFUND employer 8.4% (${kina2(p.employerNasfund)}) on your behalf. This is not taken from your net pay.</p>
-        ${p.loans.length ? p.loans.map((l) => `<div class="leave-mini"><div><strong>${l.kind}</strong><div class="meta">${kina2(loanMonthly(l))} this month</div></div>${badge("Approved")}</div>`).join("") : `<p class="meta">No active loan deduction.</p>`}
+        ${p.loans.length ? p.loans.map((l) => `<div class="leave-mini"><div><strong>${esc(l.kind)}</strong><div class="meta">${kina2(loanMonthly(l))} this month</div></div>${badge("Approved")}</div>`).join("") : `<p class="meta">No active loan deduction.</p>`}
       </div>
     </div>`;
 }
@@ -2124,6 +2258,7 @@ function renderStaffHome() {
 function renderProfile() {
   const person = me();
   const docs = empDocs(person.id);
+  const history = (state.employmentHistory || []).filter((item) => item.employeeId === person.id || !item.employeeId);
   return `
     <div class="page-head"><div><h2>My profile</h2><p>Your UNRE employment record and personnel files</p></div>
       <button class="btn btn-primary" data-emp="${person.id}">Open personnel files</button></div>
@@ -2135,6 +2270,14 @@ function renderProfile() {
       <div class="pay-row"><span>Appointment</span><span>${person.type}</span></div>
       <div class="pay-row"><span>Status</span><span>${person.status}</span></div>
       <div class="pay-row total"><span>Annual salary</span><span>${kina(person.salary)}</span></div>
+      <section class="employment-history"><h3>Appointment history</h3>
+        ${history.length ? `<ol class="employment-history-list">${history.map((item) => `<li>
+          <div class="employment-history-current"><span class="history-date">${esc(item.effectiveOn)}</span><strong>${esc(item.newRole)}</strong>
+            <span>${esc(item.newType)}${item.newDepartment ? ` · ${esc(item.newDepartment)}` : ""}</span><b>${kina(item.newSalary)} / year</b></div>
+          <div class="employment-history-previous"><span>Previous appointment</span><strong>${esc(item.previousRole || "Not recorded")}</strong>
+            <small>${esc(item.previousType)}${item.previousDepartment ? ` · ${esc(item.previousDepartment)}` : ""}${item.previousSalary !== null ? ` · ${kina(item.previousSalary)} / year` : ""}</small></div>
+        </li>`).join("")}</ol>` : `<p class="meta">No signed appointment changes on file. Future signed internal offers will be recorded here.</p>`}
+      </section>
       <p class="meta">${docs.length} file${docs.length === 1 ? "" : "s"} on record — resume, achievement certificates, qualifications. You can view, upload, or replace them. HR sees the same files from the Employees list.</p>
       <div class="meta hint-click">Open profile modal with files</div>
     </div>`;
@@ -2372,9 +2515,9 @@ function openDeptModal(id) {
   const staff = deptStaff(d.name);
   const desc = d.description || d.blurb || "No description on file.";
   showModal(`
-    <h3>${d.name}</h3>
-    <div class="kv" style="margin-top:0"><span>${d.code}</span><span>${d.location}</span><span>Head: ${d.head}</span></div>
-    <p class="modal-copy">${desc}</p>
+    <h3>${esc(d.name)}</h3>
+    <div class="kv" style="margin-top:0"><span>${esc(d.code)}</span><span>${esc(d.location)}</span><span>Head: ${esc(d.head)}</span></div>
+    <p class="modal-copy">${esc(desc)}</p>
     <h4 class="modal-sub">${staff.length} staff in this department</h4>
     ${staff.length ? staff.map((e) => `
       <button type="button" class="app-row" data-emp="${e.id}" data-from-dept="${d.id}">
@@ -2555,11 +2698,11 @@ function openModal(kind, attendanceEmployeeId, attendanceDate, contractId) {
   const back = document.getElementById("modal");
   const person = me();
   const empOpts = state.employees.map((e) => `<option value="${e.id}">${e.name}</option>`).join("");
-  const deptOpts = state.departments.map((d) => `<option>${d.name}</option>`).join("");
+  const deptOpts = state.departments.map((d) => `<option>${esc(d.name)}</option>`).join("");
   const rosterEmployee = state.employees[0];
   const rosterStart = todayIso();
   const rosterEnd = rosterEmployee && isTeachingRosterEmployee(rosterEmployee)
-    ? addMonthsIso(rosterStart, 6)
+    ? semesterRosterEnd(rosterStart)
     : addDaysIso(rosterStart, 13);
   const staffLeave = person ? `<input type="hidden" name="employee" value="${person.id}" /><p class="meta" style="margin-bottom:12px">Filing as <strong>${person.name}</strong></p>` : `<div class="field"><label>Employee</label><select name="employee">${empOpts}</select></div>`;
   const attendanceEmployee = attendanceEmployeeId || (person ? person.id : state.employees[0]?.id);
@@ -2611,7 +2754,7 @@ function openModal(kind, attendanceEmployeeId, attendanceDate, contractId) {
       <div class="field"><label>Name</label><input name="name" required /></div>
       <div class="field"><label>Code</label><input name="code" required /></div>
       <div class="field"><label>Location</label><input name="location" required /></div>
-      <div class="field"><label>Head of department</label><input name="head" required /></div>
+      <div class="field"><label>Head of department</label><select name="head" required>${state.employees.filter((employee) => employee.status !== "Inactive").map((employee) => `<option value="${esc(employee.id)}">${esc(employee.name)}</option>`).join("")}</select></div>
       <div class="field"><label>Short summary</label><textarea name="blurb" rows="2"></textarea></div>
       <div class="field"><label>Full description</label><textarea name="description" rows="4"></textarea></div>
       <div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button class="btn btn-primary">Save</button></div></form>`,
@@ -2816,6 +2959,27 @@ function bindPage(page) {
       route();
     };
   });
+  document.querySelectorAll("[data-user-active]").forEach((button) => {
+    button.onclick = async () => {
+      const nextActive = button.dataset.active !== "true";
+      const employee = state.employees.find((item) => item.id === button.dataset.userActive);
+      if (DEMO_MODE) {
+        if (nextActive && employee?.status === "Inactive") { toast("Restore the employee record before reactivating this account."); return; }
+        if (employee) employee.accountActive = nextActive;
+      } else {
+        try {
+          await apiRequest(`/users/${encodeURIComponent(button.dataset.userActive)}/active`, {
+            method: "PATCH", body: JSON.stringify({ active: nextActive })
+          });
+          await loadCoreFromApi();
+        } catch (error) { toast(error.message); route(); return; }
+      }
+      if (DEMO_MODE) addDemoAudit("update", "user-access", button.dataset.userActive, { active: nextActive });
+      save();
+      toast(nextActive ? "Account activated." : "Account deactivated. Existing sessions are revoked on their next request.");
+      route();
+    };
+  });
   const dashboardPayrollYear = document.getElementById("dashboard-payroll-year");
   if (dashboardPayrollYear) dashboardPayrollYear.onchange = () => {
     viewMode.dashboardYear = dashboardPayrollYear.value;
@@ -2888,6 +3052,22 @@ function bindPage(page) {
         } catch (error) { toast(error.message); return; }
       } else {
         record.status = nextStatus;
+        if (nextStatus === "Completed") {
+          let remainingRecovery = Number(record.loan || 0);
+          const employeeLoans = state.loans.filter((loan) => (loan.employeeId === record.employeeId || loan.employee === record.employee) &&
+            loan.status === "Approved" && loan.amount > (loan.repaid || 0));
+          for (const loan of employeeLoans) {
+            if (remainingRecovery <= 0) break;
+            const balance = loan.amount - (loan.repaid || 0);
+            const paidMonths = loan.amount ? Math.floor((loan.repaid || 0) / (loan.amount / loan.term)) : 0;
+            const monthsLeft = Math.max(1, loan.term - paidMonths);
+            const installment = roundCurrency(balance / monthsLeft);
+            const applied = Math.min(balance, installment, remainingRecovery);
+            loan.repaid = roundCurrency((loan.repaid || 0) + applied);
+            if (loan.repaid >= loan.amount) loan.status = "Paid";
+            remainingRecovery = roundCurrency(remainingRecovery - applied);
+          }
+        }
       }
       if (DEMO_MODE) addDemoAudit("update", "payroll", record.id, { status: nextStatus, employee: record.employee });
       save();
@@ -3192,10 +3372,17 @@ function bindPage(page) {
     };
   });
   document.querySelectorAll("[data-leave-view]").forEach((b) => { b.onclick = () => { viewMode.leave = b.dataset.leaveView; route(); }; });
-  document.querySelectorAll("[data-attendance]").forEach((b) => { b.onclick = () => {
+  document.querySelectorAll("[data-attendance]").forEach((b) => { b.onclick = async () => {
     if (!isHr()) return;
     const item = attendanceRecords().find((entry) => entry.id === b.dataset.attendance);
     if (!item) return;
+    if (!DEMO_MODE) {
+      try {
+        await apiRequest(`/attendance/${encodeURIComponent(item.id)}`, {
+          method: "PATCH", body: JSON.stringify({ status: b.dataset.act })
+        });
+      } catch (error) { toast(error.message); return; }
+    }
     item.status = b.dataset.act;
     save();
     toast(`Attendance updated for ${state.employees.find((employee) => employee.id === item.employeeId)?.name || "employee"}.`);
@@ -3245,6 +3432,7 @@ function bindPage(page) {
       const job = state.jobs.find((item) => item.id === button.dataset.closeJob || item.id === button.dataset.reopenJob);
       const status = button.hasAttribute("data-close-job") ? "Closed" : "Open";
       if (!job || !isHr()) return;
+      if (status === "Open" && job.closesOn && job.closesOn < todayIso()) { toast("This posting has expired and cannot be reopened."); return; }
       if (!DEMO_MODE) {
         try { await apiRequest(`/jobs/${job.id}`, { method: "PATCH", body: JSON.stringify({ status }) }); }
         catch (error) { toast(error.message); return; }
@@ -3265,24 +3453,29 @@ function bindPage(page) {
     if (!isHr()) return;
     const item = state.loans.find((l) => l.id === b.dataset.loan);
     const emp = state.employees.find((e) => e.name === item.employee);
+    if (!item || !emp || !["Approved", "Rejected"].includes(b.dataset.act) || item.status !== "Pending") return;
     if (b.dataset.act === "Approved") {
       const check = loanEligible(emp, item.amount);
       if (!check.ok) { toast(check.reason); return; }
-      item.repaid = item.repaid || 0;
     }
-    item.status = b.dataset.act;
-    addNotification({
-      type: "request-status",
-      employeeId: emp.id,
-      title: `Loan ${item.status.toLowerCase()}`,
-      message: `Your ${item.kind.toLowerCase()} loan application for ${kina(item.amount)} was ${item.status.toLowerCase()}.`,
-      targetPage: "loans"
-    });
     if (!DEMO_MODE) {
-      try { await apiRequest(`/loans/${item.id}`, { method: "PATCH", body: JSON.stringify({ status: item.status, repaid: item.repaid || 0 }) }); await refreshCoreAfterApi(); }
+      try {
+        await apiRequest(`/loans/${item.id}`, { method: "PATCH", body: JSON.stringify({ status: b.dataset.act }) });
+        await refreshCoreAfterApi();
+      }
       catch (error) { toast(error.message); return; }
+    } else {
+      item.status = b.dataset.act;
+      if (item.status === "Approved") item.repaid = item.repaid || 0;
+      addNotification({
+        type: "request-status", employeeId: emp.id,
+        title: `Loan ${item.status.toLowerCase()}`,
+        message: `Your ${item.kind.toLowerCase()} loan application for ${kina(item.amount)} was ${item.status.toLowerCase()}.`,
+        targetPage: "loans"
+      });
     }
-    save(); toast(`Loan ${item.status.toLowerCase()} for ${item.employee}.`); route();
+    if (DEMO_MODE) save();
+    toast(`Loan ${b.dataset.act.toLowerCase()} for ${item.employee}.`); route();
   }; });
 }
 
@@ -3364,6 +3557,7 @@ document.getElementById("modal").addEventListener("click", async (e) => {
     const job = state.jobs.find((item) => item.id === jobId);
     const status = closeJob.hasAttribute("data-close-job") ? "Closed" : "Open";
     if (!job || !isHr()) return;
+    if (status === "Open" && job.closesOn && job.closesOn < todayIso()) { toast("This posting has expired and cannot be reopened."); return; }
     if (!DEMO_MODE) {
       try { await apiRequest(`/jobs/${job.id}`, { method: "PATCH", body: JSON.stringify({ status }) }); }
       catch (error) { toast(error.message); return; }
@@ -3440,6 +3634,15 @@ document.getElementById("modal").addEventListener("submit", async (e) => {
     }
     const previousDept = state.departments.find((item) => item.name === emp.dept);
     const nextDept = state.departments.find((item) => item.name === job.dept);
+    if (DEMO_MODE) {
+      state.employmentHistory = state.employmentHistory || [];
+      state.employmentHistory.unshift({
+        id: uid("eh"), employeeId: emp.id, applicationId: app.id,
+        previousRole: emp.role, previousType: emp.type, previousDepartment: emp.dept, previousSalary: emp.salary,
+        newRole: job.title, newType: job.band || "Staff", newDepartment: job.dept, newSalary: salary,
+        effectiveOn: todayIso()
+      });
+    }
     if (previousDept && previousDept !== nextDept) previousDept.members = Math.max(0, (previousDept.members || 0) - 1);
     if (nextDept && previousDept !== nextDept) nextDept.members = (nextDept.members || 0) + 1;
     emp.role = job.title;
@@ -3556,6 +3759,7 @@ document.getElementById("modal").addEventListener("submit", async (e) => {
       } catch (error) { toast(error.message); return; }
     } else {
       Object.assign(employee, update);
+      if (update.status === "Inactive") employee.accountActive = false;
     }
     if (DEMO_MODE) addDemoAudit("update", "employee-reporting", employee.id, { fields: ["gender", "equityGroup", "status", "terminatedOn"] });
     save();
@@ -3698,14 +3902,34 @@ document.getElementById("modal").addEventListener("submit", async (e) => {
     return;
   }
   if (form.id === "f-dept") {
-    state.departments.push({ id: uid("d"), name: data.name, code: data.code.toUpperCase(), blurb: data.blurb, description: data.description || data.blurb, members: 0, location: data.location, head: data.head });
+    const head = state.employees.find((employee) => employee.id === data.head);
+    if (!data.name.trim() || !data.code.trim() || !data.location.trim() || !head) {
+      toast("Enter department details and choose a department head.");
+      return;
+    }
+    const department = { id: uid("d"), name: data.name.trim(), code: data.code.trim().toUpperCase(), blurb: data.blurb.trim(),
+      description: data.description.trim() || data.blurb.trim(), members: 0, location: data.location.trim(), head: head.name, headEmployeeId: head.id };
+    if (!DEMO_MODE) {
+      try {
+        const saved = await apiRequest("/departments", { method: "POST", body: JSON.stringify({
+          name: department.name, code: department.code, description: department.description,
+          location: department.location, head_employee_id: department.headEmployeeId
+        }) });
+        department.id = saved.id;
+        await loadCoreFromApi();
+      } catch (error) { toast(error.message); return; }
+    } else state.departments.push(department);
     toast("Department added.");
   }
   if (form.id === "f-leave") {
     const emp = state.employees.find((x) => x.id === data.employee);
-    if (session.role === "staff" && emp.id !== session.employeeId) { toast("You can only file your own leave."); return; }
+    if (!emp || (session.role === "staff" && emp.id !== session.employeeId)) { toast("You can only file leave for your own active employee record."); return; }
+    if (!validIsoDate(data.start) || !validIsoDate(data.end) || data.end < data.start ||
+        !["Annual", "Sick", "Personal", "Emergency", "Research"].includes(data.type) || !data.note.trim()) {
+      toast("Choose a leave type and enter a valid date range and reason.");
+      return;
+    }
     const request = { id: uid("l"), employee: emp.name, dept: emp.dept, type: data.type, start: data.start, end: data.end, note: data.note, status: "Pending" };
-    state.leave.unshift(request);
     if (!DEMO_MODE) {
       try {
         await apiRequest("/leave", { method: "POST", body: JSON.stringify({
@@ -3713,7 +3937,7 @@ document.getElementById("modal").addEventListener("submit", async (e) => {
         }) });
         await loadCoreFromApi();
       } catch (error) { toast(error.message); return; }
-    }
+    } else state.leave.unshift(request);
     addNotification({
       type: "request-submitted",
       recipientRole: "hr",
@@ -3757,21 +3981,25 @@ document.getElementById("modal").addEventListener("submit", async (e) => {
   }
   if (form.id === "f-loan") {
     const emp = state.employees.find((x) => x.id === data.employee);
-    if (session.role === "staff" && emp.id !== session.employeeId) { toast("You can only apply for your own loan."); return; }
+    if (!emp || (session.role === "staff" && emp.id !== session.employeeId)) { toast("You can only apply for your own active employee record."); return; }
     const amount = Number(data.amount);
-    const check = loanEligible(emp, amount);
-    if (!check.ok && state.loans.some((l) => l.employee === emp.name && l.status === "Approved" && (l.amount - (l.repaid || 0)) > 0)) {
-      toast(check.reason); return;
+    const term = Number(data.term);
+    if (!Number.isFinite(amount) || amount < 500 || !Number.isInteger(term) || term < 1 || term > 36 || !data.reason.trim() ||
+        !["Education", "Housing", "Emergency", "Salary advance"].includes(data.kind)) {
+      toast("Enter a supported loan type, an amount of at least K500, a 1–36 month term, and a purpose.");
+      return;
     }
-    state.loans.unshift({ id: uid("n"), employee: emp.name, dept: emp.dept, kind: data.kind, amount, term: Number(data.term), reason: data.reason, status: "Pending", salary: emp.salary });
+    const check = loanEligible(emp, amount);
+    if (!check.ok) { toast(check.reason); return; }
+    const request = { id: uid("n"), employee: emp.name, employeeId: emp.id, dept: emp.dept, kind: data.kind, amount, term, reason: data.reason, status: "Pending", salary: emp.salary };
     if (!DEMO_MODE) {
       try {
         await apiRequest("/loans", { method: "POST", body: JSON.stringify({
-          employee_id: emp.id, amount, term_months: Number(data.term), purpose: data.reason, status: "Pending"
+          employee_id: emp.id, loan_type: data.kind, amount, term_months: term, purpose: data.reason, status: "Pending"
         }) });
         await loadCoreFromApi();
       } catch (error) { toast(error.message); return; }
-    }
+    } else state.loans.unshift(request);
     addNotification({
       type: "request-submitted",
       recipientRole: "hr",
@@ -3789,7 +4017,7 @@ document.getElementById("modal").addEventListener("submit", async (e) => {
     }
     const employee = state.employees.find((item) => item.id === data.employeeId);
     const expectedEnd = isTeachingRosterEmployee(employee)
-      ? addMonthsIso(data.startDate, 6)
+      ? semesterRosterEnd(data.startDate)
       : addDaysIso(data.startDate, 13);
     if (data.endDate !== expectedEnd) {
       toast(isTeachingRosterEmployee(employee)
@@ -3797,7 +4025,7 @@ document.getElementById("modal").addEventListener("submit", async (e) => {
         : "This employee's roster must cover exactly two weeks.");
       return;
     }
-    rosterRecords().unshift({
+    const shift = {
       id: uid("r"),
       employeeId: data.employeeId,
       startDate: data.startDate,
@@ -3805,18 +4033,38 @@ document.getElementById("modal").addEventListener("submit", async (e) => {
       start: data.start,
       end: data.end,
       breakMinutes: Number(data.breakMinutes)
-    });
+    };
+    if (!DEMO_MODE) {
+      try {
+        const saved = await apiRequest("/roster", { method: "POST", body: JSON.stringify({
+          employee_id: shift.employeeId, starts_on: shift.startDate, ends_on: shift.endDate,
+          start_time: shift.start, end_time: shift.end, break_minutes: shift.breakMinutes
+        }) });
+        shift.id = saved.id;
+        await loadCoreFromApi();
+      } catch (error) { toast(error.message); return; }
+    } else rosterRecords().unshift(shift);
     toast("Roster shift saved.");
   }
   if (form.id === "f-overtime") {
-    overtimeRecords().unshift({
+    const entry = {
       id: uid("ot"),
       employeeId: data.employeeId,
       date: data.date,
       hours: Number(data.hours),
       multiplier: Number(data.multiplier),
-      reason: data.reason
-    });
+      reason: data.reason.trim()
+    };
+    if (!DEMO_MODE) {
+      try {
+        const saved = await apiRequest("/overtime", { method: "POST", body: JSON.stringify({
+          employee_id: entry.employeeId, overtime_date: entry.date, hours: entry.hours,
+          multiplier: entry.multiplier, reason: entry.reason
+        }) });
+        entry.id = saved.id;
+        await loadCoreFromApi();
+      } catch (error) { toast(error.message); return; }
+    } else overtimeRecords().unshift(entry);
     toast("Overtime saved and included in payroll.");
   }
   if (form.id === "f-attendance") {
@@ -3857,7 +4105,7 @@ document.getElementById("modal").addEventListener("change", async (e) => {
     const help = document.getElementById("roster-period-help");
     if (employee && start && end) {
       const teaching = isTeachingRosterEmployee(employee);
-      end.value = teaching ? addMonthsIso(start.value, 6) : addDaysIso(start.value, 13);
+      end.value = teaching ? semesterRosterEnd(start.value) : addDaysIso(start.value, 13);
       if (period) period.value = teaching ? "6 months (semester)" : "14 days (two weeks)";
       if (help) help.textContent = teaching
         ? "Lecturers and tutors are rostered for the semester. The default period is 6 months."
@@ -3888,9 +4136,9 @@ function setPortal(kind) {
     ? "Approve leave, loans, payroll, and recruitment for the university."
     : "File leave and loans, see your payslip, and apply for internal jobs.";
   document.getElementById("login-btn").textContent = kind === "hr" ? "Enter HR office" : "Enter self-service";
-  document.getElementById("login-hint").innerHTML = kind === "hr"
-    ? `HR demo: <strong>hr@unre.ac.pg</strong> / <strong>${DEMO_PASS}</strong>`
-    : `Enter your UNRE work email as your username. Demo password: <strong>${DEMO_PASS}</strong>.`;
+  document.getElementById("login-hint").textContent = DEMO_MODE
+    ? kind === "hr" ? `HR demo: hr@unre.ac.pg / ${DEMO_PASS}` : `Demo password: ${DEMO_PASS}. Use your UNRE work email as your username.`
+    : kind === "hr" ? "Use your assigned HR account." : "Use your assigned UNRE work email and password.";
 }
 
 document.querySelectorAll("[data-portal]").forEach((b) => { b.onclick = () => setPortal(b.dataset.portal); });
@@ -3952,7 +4200,7 @@ document.getElementById("login-form").addEventListener("submit", async (e) => {
     session = { role: "hr", email, label: email };
   } else {
     const emp = state.employees.find((x) => x.email === email);
-    if (!emp || password !== (emp.password || DEMO_PASS)) { toast("Invalid username or password."); return; }
+    if (!emp || emp.accountActive === false || password !== (emp.password || DEMO_PASS)) { toast("Invalid username or password."); return; }
     session = { role: emp.accessRole || "staff", employeeId: emp.id, email: emp.email, label: emp.name };
   }
   if (DEMO_MODE) addDemoAudit("login", "user", session.email, { role: session.role });
@@ -3984,6 +4232,15 @@ function restoreDemoSession() {
 }
 
 async function initializeApp() {
+  if (DEMO_MODE && location.protocol !== "file:" && !location.hostname.endsWith(".github.io")) {
+    try {
+      const health = await fetch(`${API_BASE}/health`, { headers: { Accept: "application/json" } });
+      const contentType = health.headers.get("content-type") || "";
+      const config = contentType.includes("application/json") ? await health.json() : null;
+      DEMO_MODE = config?.demoAllowed === true;
+    } catch (_) { DEMO_MODE = false; }
+  }
+  setPortal(viewMode.portal);
   if (DEMO_MODE) {
     restoreDemoSession();
     return;
@@ -3995,13 +4252,6 @@ async function initializeApp() {
     return;
   }
   const contentType = health.headers.get("content-type") || "";
-  const staticOnlyResponse = !contentType.includes("application/json") &&
-    ([404, 405].includes(health.status) || (health.ok && contentType.includes("text/html")));
-  if (staticOnlyResponse) {
-    DEMO_MODE = true;
-    restoreDemoSession();
-    return;
-  }
   if (!contentType.includes("application/json")) return;
   try {
     const result = await apiRequest("/auth/me");

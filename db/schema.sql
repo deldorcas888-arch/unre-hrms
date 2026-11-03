@@ -51,10 +51,11 @@ CREATE TABLE IF NOT EXISTS tasks (
 );
 CREATE TABLE IF NOT EXISTS loans (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(), employee_id uuid NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
-  amount numeric(12,2) NOT NULL CHECK (amount > 0), term_months integer NOT NULL CHECK (term_months > 0),
+  loan_type text NOT NULL DEFAULT 'Staff loan', amount numeric(12,2) NOT NULL CHECK (amount > 0), term_months integer NOT NULL CHECK (term_months > 0),
   purpose text, repaid numeric(12,2) NOT NULL DEFAULT 0 CHECK (repaid >= 0), status text NOT NULL DEFAULT 'Pending' CHECK (status IN ('Pending','Approved','Rejected','Paid')),
   reviewed_by uuid REFERENCES users(id) ON DELETE SET NULL, reviewed_at timestamptz, created_at timestamptz NOT NULL DEFAULT now()
 );
+ALTER TABLE loans ADD COLUMN IF NOT EXISTS loan_type text NOT NULL DEFAULT 'Staff loan';
 CREATE TABLE IF NOT EXISTS payroll (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(), employee_id uuid NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
   period date NOT NULL, gross numeric(12,2) NOT NULL, nasfund numeric(12,2) NOT NULL DEFAULT 0,
@@ -117,6 +118,45 @@ CREATE TABLE IF NOT EXISTS contracts (
   created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now(),
   CHECK (ends_on IS NULL OR ends_on >= starts_on)
 );
+CREATE TABLE IF NOT EXISTS employment_history (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  employee_id uuid NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+  application_id uuid REFERENCES applications(id) ON DELETE SET NULL,
+  previous_role text,
+  previous_employee_type text,
+  previous_department text,
+  previous_annual_salary numeric(12,2) CHECK (previous_annual_salary IS NULL OR previous_annual_salary >= 0),
+  new_role text NOT NULL,
+  new_employee_type text,
+  new_department text,
+  new_annual_salary numeric(12,2) NOT NULL CHECK (new_annual_salary >= 0),
+  effective_on date NOT NULL DEFAULT CURRENT_DATE,
+  recorded_by uuid REFERENCES users(id) ON DELETE SET NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS employment_history_employee_date_idx ON employment_history(employee_id,effective_on DESC);
+CREATE TABLE IF NOT EXISTS roster_shifts (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  employee_id uuid NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+  starts_on date NOT NULL,
+  ends_on date NOT NULL,
+  start_time time NOT NULL,
+  end_time time NOT NULL,
+  break_minutes integer NOT NULL DEFAULT 0 CHECK (break_minutes >= 0),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  CHECK (ends_on >= starts_on)
+);
+CREATE TABLE IF NOT EXISTS overtime_entries (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  employee_id uuid NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+  overtime_date date NOT NULL,
+  hours numeric(5,2) NOT NULL CHECK (hours > 0 AND hours <= 24),
+  multiplier numeric(3,2) NOT NULL CHECK (multiplier IN (1.5, 2.0)),
+  reason text NOT NULL,
+  created_by uuid REFERENCES users(id) ON DELETE SET NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS overtime_employee_date_idx ON overtime_entries(employee_id,overtime_date);
 CREATE INDEX IF NOT EXISTS contracts_employee_end_idx ON contracts(employee_id,ends_on);
 CREATE INDEX IF NOT EXISTS contracts_permit_expiry_idx ON contracts(work_permit_expires_on,visa_expires_on);
 CREATE TABLE IF NOT EXISTS notifications (
