@@ -23,6 +23,7 @@ const NAV_HR = [
   { id: "leave", label: "Leave Requests", icon: "leave", section: "Time & attendance" },
   { id: "attendance", label: "Attendance", icon: "attendance", section: "Time & attendance" },
   { id: "roster", label: "Roster & OT", icon: "jobs", section: "Time & attendance" },
+  { id: "chat", label: "Chatbox", icon: "me", section: "Time & attendance" },
   { id: "jobs", label: "Recruitment", icon: "jobs", section: "Talent & pay" },
   { id: "contracts", label: "Contracts", icon: "contracts", section: "Talent & pay" },
   { id: "loans", label: "Loan Approvals", icon: "loans", section: "Talent & pay" },
@@ -42,6 +43,7 @@ const NAV_STAFF = [
   { id: "leave", label: "My leave", icon: "leave", section: "Requests" },
   { id: "loans", label: "My loans", icon: "loans", section: "Requests" },
   { id: "attendance", label: "Attendance", icon: "attendance", section: "Requests" },
+  { id: "chat", label: "Chatbox", icon: "me", section: "Requests" },
   { id: "payslip", label: "Payslip", icon: "pay", section: "Career & pay" },
   { id: "jobs", label: "Internal jobs", icon: "jobs", section: "Career & pay" }
 ];
@@ -232,7 +234,7 @@ let viewMode = {
   payrollCompanyYear: todayIso().slice(0, 4), recruitQuery: "", recruitStatus: "All",
   recruitJob: "All", recruitPage: 1, dashboardYear: todayIso().slice(0, 4),
   analyticsYear: todayIso().slice(0, 4), analyticsRows: [], reportYear: todayIso().slice(0, 4),
-  reportRows: [], contractQuery: "", auditQuery: ""
+  reportRows: [], contractQuery: "", auditQuery: "", chatMode: "messages", chatEmployeeId: "", faqMessages: []
 };
 let session = null;
 let notificationsOpen = false;
@@ -246,6 +248,7 @@ function load() {
     if (raw) {
       const data = JSON.parse(raw);
       if (!Array.isArray(data.notifications)) data.notifications = [];
+      if (!Array.isArray(data.chatMessages)) data.chatMessages = [];
       if (!Array.isArray(data.attendance)) data.attendance = structuredClone(SEED.attendance);
       if (!Array.isArray(data.tasks)) data.tasks = structuredClone(SEED.tasks);
       if (!Array.isArray(data.payroll)) data.payroll = [];
@@ -285,6 +288,7 @@ function load() {
     }
   } catch (_) {}
   const initial = structuredClone(SEED);
+  initial.chatMessages = [];
   initial.demoSeedVersion = DEMO_SEED_VERSION;
   return initial;
 }
@@ -413,6 +417,11 @@ function fromApiNotification(row) {
   return { id: row.id, title: row.title, message: row.body, createdAt: row.created_at?.slice(0, 10) || todayIso(),
     read: Boolean(row.read_at), recipientRole: session?.role, employeeId: session?.employeeId, type: "request-status", targetPage };
 }
+function fromApiChatMessage(row) {
+  return { id: row.id, employeeId: row.employee_id, employeeName: row.employee_name || "Staff member",
+    senderRole: row.sender_role || "staff", senderEmail: row.sender_email || "", message: row.message,
+    createdAt: row.created_at || "" };
+}
 async function loadCoreFromApi() {
   const requests = [
     apiRequest("/employees"), DEMO_MODE || !isHr() ? Promise.resolve({ data: [] }) : apiRequest("/departments"),
@@ -421,7 +430,7 @@ async function loadCoreFromApi() {
   const [employees, departments, attendance, loans, payroll] = await Promise.all(requests);
   const leave = await apiRequest("/leave");
   const reportYear = viewMode.reportYear || todayIso().slice(0, 4);
-  const [jobs, applications, documents, notifications, tasks, contracts, users, auditLogs, workforceReport, roster, overtime, employmentHistory] = await Promise.all([
+  const [jobs, applications, documents, notifications, tasks, contracts, users, auditLogs, workforceReport, roster, overtime, employmentHistory, chatMessages] = await Promise.all([
     apiRequest("/jobs"), apiRequest("/applications"), apiRequest("/documents"), apiRequest("/notifications"), apiRequest("/tasks"),
     isHr() ? apiRequest("/contracts") : Promise.resolve({ data: [] }),
     isHr() ? apiRequest("/users") : Promise.resolve({ data: [] }),
@@ -429,7 +438,8 @@ async function loadCoreFromApi() {
     isLeader() ? apiRequest(`/reports/workforce?year=${encodeURIComponent(reportYear)}`) : Promise.resolve(null),
     isHr() ? apiRequest("/roster") : Promise.resolve({ data: [] }),
     isHr() ? apiRequest("/overtime") : Promise.resolve({ data: [] }),
-    session?.employeeId ? apiRequest(`/employees/${encodeURIComponent(session.employeeId)}/employment-history`) : Promise.resolve({ data: [] })
+    session?.employeeId ? apiRequest(`/employees/${encodeURIComponent(session.employeeId)}/employment-history`) : Promise.resolve({ data: [] }),
+    isHr() || session?.role === "staff" ? apiRequest("/chat/messages") : Promise.resolve({ data: [] })
   ]);
   state.employees = (employees.data || []).map(fromApiEmployee);
   state.departments = (departments.data || []).map((row) => ({
@@ -448,6 +458,7 @@ async function loadCoreFromApi() {
   state.notifications = (notifications.data || []).map(fromApiNotification);
   state.tasks = (tasks.data || []).map(fromApiTask);
   state.contracts = (contracts.data || []).map(fromApiContract);
+  state.chatMessages = (chatMessages.data || []).map(fromApiChatMessage);
   state.roster = (roster.data || []).map(fromApiRoster);
   state.overtime = (overtime.data || []).map(fromApiOvertime);
   state.employmentHistory = (employmentHistory.data || []).map(fromApiEmploymentHistory);
@@ -1093,13 +1104,13 @@ function route() {
   document.querySelectorAll("#nav a").forEach((a) => a.classList.toggle("active", a.dataset.page === page));
   const hr = {
     dashboard: renderDashboard, analytics: renderAnalytics, employees: renderEmployees, departments: renderDepartments, tasks: renderTasks,
-    leave: renderLeaveHr, jobs: renderJobsHr, contracts: renderContracts, loans: renderLoansHr, attendance: renderAttendance, roster: renderRoster, payroll: renderPayrollHr,
+    leave: renderLeaveHr, jobs: renderJobsHr, contracts: renderContracts, loans: renderLoansHr, attendance: renderAttendance, roster: renderRoster, chat: renderChat, payroll: renderPayrollHr,
     reports: renderReports, "roles-audit": renderRolesAudit
   };
   const leaders = { reports: renderReports };
   const staff = {
     home: renderStaffHome, profile: renderProfile, tasks: renderTasks, leave: renderLeaveStaff, loans: renderLoansStaff,
-    attendance: renderAttendanceStaff, payslip: renderPayslip, jobs: renderJobsStaff
+    attendance: renderAttendanceStaff, payslip: renderPayslip, jobs: renderJobsStaff, chat: renderChat
   };
   document.getElementById("view").innerHTML = (isHr() ? hr : isLeader() ? leaders : staff)[page]();
   bindPage(page);
@@ -2260,6 +2271,76 @@ function renderStaffHome() {
     </div>`;
 }
 
+function hrFaqAnswer(question) {
+  const text = question.toLowerCase();
+  if (/leave|annual|sick|time off|absence/.test(text)) {
+    return "Submit a leave request from My leave with the type, dates, and reason. HR reviews it; only approved leave is added to the attendance record.";
+  }
+  if (/pay|payslip|salary|nasfund|paye/.test(text)) {
+    return "Open Payslip and choose a payroll period. Only payroll marked Completed is a final payslip and can be downloaded as a PDF from the browser print dialog.";
+  }
+  if (/loan|borrow|repay/.test(text)) {
+    return "Staff loans start at K500, have a 1–36 month term, and are limited to 40% of annual salary. Only one approved loan can be outstanding at a time; repayments are deducted through payroll.";
+  }
+  if (/job|vacan|recruit|application|career/.test(text)) {
+    return "Open Internal jobs to view current UNRE vacancies and track your applications. Internal applications are visible to HR in the recruitment pipeline.";
+  }
+  if (/attendance|present|absent|roster/.test(text)) {
+    return "Open Attendance to review your recorded days. Roster and overtime entry is managed by HR; contact HR if a record needs correction.";
+  }
+  if (/password|login|account|sign in/.test(text)) {
+    return "Staff accounts are provisioned by UNRE HR. Use your UNRE work email and contact HR if you cannot sign in or need your account updated.";
+  }
+  if (/document|file|certificate|resume|cv/.test(text)) {
+    return "Open My profile and choose Open personnel files to view or update your personnel documents.";
+  }
+  return "I’m the automated UNRE HR guide and can answer common questions about leave, payslips, loans, attendance, jobs, accounts, and personnel files. For a personal case or an official decision, use Message HR.";
+}
+
+function renderChat() {
+  const hr = isHr();
+  const messages = state.chatMessages || [];
+  const employeeOptions = state.employees.filter((employee) => employee.status !== "Inactive" || messages.some((message) => message.employeeId === employee.id));
+  const latestEmployeeId = [...messages].reverse().find((message) => employeeOptions.some((employee) => employee.id === message.employeeId))?.employeeId;
+  const firstEmployee = employeeOptions.find((employee) => employee.id === latestEmployeeId) || employeeOptions[0];
+  if (hr && !employeeOptions.some((employee) => employee.id === viewMode.chatEmployeeId)) viewMode.chatEmployeeId = firstEmployee?.id || "";
+  const employee = hr ? employeeOptions.find((item) => item.id === viewMode.chatEmployeeId) : me();
+  const conversation = messages.filter((message) => message.employeeId === employee?.id);
+  const faqMessages = viewMode.faqMessages || [];
+  return `
+    <div class="page-head"><div><span class="eyebrow">${hr ? "PEOPLE OPERATIONS" : "STAFF SELF-SERVICE"}</span><h2>Chatbox</h2><p>Message UNRE HR or get quick guidance on common portal questions.</p></div></div>
+    <div class="chat-mode" role="tablist" aria-label="Chatbox mode">
+      <button type="button" role="tab" aria-selected="${viewMode.chatMode === "messages"}" class="${viewMode.chatMode === "messages" ? "on" : ""}" data-chat-mode="messages">Message HR</button>
+      <button type="button" role="tab" aria-selected="${viewMode.chatMode === "assistant"}" class="${viewMode.chatMode === "assistant" ? "on" : ""}" data-chat-mode="assistant">FAQ assistant</button>
+    </div>
+    ${viewMode.chatMode === "assistant" ? `
+      <section class="chat-panel faq-panel">
+        <div class="chat-panel-heading"><div><span class="eyebrow">AUTOMATED GUIDANCE</span><h3>UNRE HR assistant</h3></div><span class="chat-local-tag">On this device</span></div>
+        <p class="meta">Answers come from general portal guidance, not your personal HR records. Message HR for private cases or official decisions.</p>
+        <div class="chat-transcript faq-transcript" role="log" aria-live="polite" aria-label="FAQ conversation">
+          <div class="chat-bubble assistant-bubble"><strong>UNRE HR assistant</strong><p>Talofa. Ask about leave, payslips, loans, attendance, jobs, accounts, or personnel files.</p></div>
+          ${faqMessages.map((message) => `<div class="chat-bubble ${message.role === "user" ? "my-bubble" : "assistant-bubble"}"><strong>${message.role === "user" ? "You" : "UNRE HR assistant"}</strong><p>${esc(message.text)}</p></div>`).join("")}
+        </div>
+        <form id="faq-chat-form" class="chat-compose"><label class="sr-only" for="faq-chat-input">Ask a question</label><textarea id="faq-chat-input" name="question" maxlength="1000" rows="2" placeholder="Ask a general HR question" required></textarea><button type="submit" class="btn btn-primary">Ask</button></form>
+      </section>` : `
+      <section class="chat-panel message-panel">
+        <div class="chat-panel-heading"><div><span class="eyebrow">PRIVATE CONVERSATION</span><h3>${hr ? "Staff messages" : "Message HR"}</h3></div>${hr ? `<label class="chat-employee-picker"><span class="sr-only">Choose staff member</span><select id="chat-employee">${employeeOptions.map((item) => `<option value="${esc(item.id)}"${item.id === employee?.id ? " selected" : ""}>${esc(item.name)} · ${esc(item.dept || "Department not set")}</option>`).join("")}</select></label>` : `<span class="chat-recipient">UNRE HR office</span>`}</div>
+        <div class="chat-transcript" role="log" aria-live="polite" aria-label="Messages with ${esc(hr ? employee?.name || "staff" : "UNRE HR")}">
+          ${conversation.length ? conversation.map((message) => {
+            const mine = hr ? message.senderRole === "hr" : message.senderRole !== "hr";
+            const sender = message.senderRole === "hr" ? (message.senderEmail || "UNRE HR") : (hr ? message.employeeName : "You");
+            const sentAt = message.createdAt ? new Date(message.createdAt).toLocaleString() : "Just now";
+            return `<div class="chat-bubble ${mine ? "my-bubble" : "other-bubble"}"><div class="chat-message-meta"><strong>${esc(sender)}</strong><time>${esc(sentAt)}</time></div><p>${esc(message.message)}</p></div>`;
+          }).join("") : `<div class="chat-empty"><strong>${hr ? "No messages in this conversation yet." : "Start a conversation with HR."}</strong><p class="meta">${hr ? "Choose a staff member and send a reply." : "Messages are private to you and authorized HR staff."}</p></div>`}
+        </div>
+        <form id="hr-chat-form" class="chat-compose">
+          ${hr ? `<input type="hidden" name="employeeId" value="${esc(employee?.id || "")}" />` : ""}
+          <label class="sr-only" for="hr-chat-input">Write a message</label><textarea id="hr-chat-input" name="message" maxlength="2000" rows="2" placeholder="Write a message to ${hr ? esc(employee?.name || "staff") : "UNRE HR"}" required></textarea>
+          <button type="submit" class="btn btn-primary"${!employee ? " disabled" : ""}>Send</button>
+        </form>
+      </section>`}`;
+}
+
 function renderProfile() {
   const person = me();
   const docs = empDocs(person.id);
@@ -2868,6 +2949,41 @@ function closeModal() { document.getElementById("modal").classList.add("hidden")
 
 function bindPage(page) {
   document.querySelectorAll("[data-go]").forEach((b) => { b.onclick = () => { location.hash = "#/" + b.dataset.go; }; });
+  document.querySelectorAll("[data-chat-mode]").forEach((button) => {
+    button.onclick = () => { viewMode.chatMode = button.dataset.chatMode; route(); };
+  });
+  const chatEmployee = document.getElementById("chat-employee");
+  if (chatEmployee) chatEmployee.onchange = () => { viewMode.chatEmployeeId = chatEmployee.value; route(); };
+  const chatForm = document.getElementById("hr-chat-form");
+  if (chatForm) chatForm.onsubmit = async (event) => {
+    event.preventDefault();
+    const message = chatForm.elements.message.value.trim();
+    const employeeId = isHr() ? chatForm.elements.employeeId.value : session.employeeId;
+    if (!message || !employeeId) return;
+    if (!DEMO_MODE) {
+      try {
+        await apiRequest("/chat/messages", { method: "POST", body: JSON.stringify({ employee_id: employeeId, message }) });
+        await loadCoreFromApi();
+      } catch (error) { toast(error.message); return; }
+    } else {
+      const employee = state.employees.find((item) => item.id === employeeId);
+      state.chatMessages.push({ id: uid("chat"), employeeId, employeeName: employee?.name || "Staff member",
+        senderRole: session.role, senderEmail: session.email, message, createdAt: new Date().toISOString() });
+      addNotification(isHr()
+        ? { type: "request-status", employeeId, title: "New HR message", message: "HR sent you a message. Open Chatbox to reply.", targetPage: "chat" }
+        : { type: "request-status", recipientRole: "hr", employeeName: employee?.name, title: "New staff message", message: `${employee?.name || "A staff member"} sent HR a message.`, targetPage: "chat" });
+    }
+    save();
+    route();
+  };
+  const faqForm = document.getElementById("faq-chat-form");
+  if (faqForm) faqForm.onsubmit = (event) => {
+    event.preventDefault();
+    const question = faqForm.elements.question.value.trim();
+    if (!question) return;
+    viewMode.faqMessages = [...(viewMode.faqMessages || []), { role: "user", text: question }, { role: "assistant", text: hrFaqAnswer(question) }];
+    route();
+  };
   const payslipPeriod = document.getElementById("payslip-period");
   if (payslipPeriod) payslipPeriod.onchange = () => {
     viewMode.payslipPeriod = payslipPeriod.value;
@@ -4158,6 +4274,9 @@ document.querySelectorAll("[data-portal]").forEach((b) => { b.onclick = () => se
 function showApp() {
   document.getElementById("auth").classList.add("hidden");
   document.getElementById("app").classList.remove("hidden");
+  viewMode.chatMode = "messages";
+  viewMode.chatEmployeeId = "";
+  viewMode.faqMessages = [];
   viewMode.taskView = "board";
   viewMode.taskQuery = "";
   viewMode.taskStatus = "All";

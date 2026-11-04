@@ -44,6 +44,7 @@ University HR for the **Papua New Guinea University of Natural Resources and Env
 - View assigned tasks and update task progress
 - View personal attendance history
 - Review personal monthly attendance summaries and filter attendance history by month
+- Message HR privately and use the local FAQ assistant for common portal questions
 - HR can sign an accepted internal applicant's contract with an agreed annual salary; the employee's role, appointment, department, and payslip update after signing.
 - After a signed internal offer, the staff profile shows the new appointment and retains the prior role, appointment type, department, and salary in appointment history.
 

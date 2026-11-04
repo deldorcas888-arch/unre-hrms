@@ -27,6 +27,8 @@ Apply `psql "$DATABASE_URL" -f db/migrations/004_employment_history.sql` to
 preserve previous and new appointment details when an internal candidate signs
 an offer. Existing employees' prior appointments are not inferred; this table
 records signed appointment changes from the migration onward.
+Apply `psql "$DATABASE_URL" -f db/migrations/005_hr_chat.sql` to add private
+staff-to-HR message conversations.
 Back up PostgreSQL before migrations.
 
 ## Production

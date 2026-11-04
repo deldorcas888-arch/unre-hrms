@@ -163,6 +163,13 @@ CREATE TABLE IF NOT EXISTS notifications (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(), user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   title text NOT NULL, body text NOT NULL, read_at timestamptz, created_at timestamptz NOT NULL DEFAULT now()
 );
+CREATE TABLE IF NOT EXISTS hr_messages (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(), employee_id uuid NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+  sender_user_id uuid REFERENCES users(id) ON DELETE SET NULL,
+  message text NOT NULL CHECK (char_length(btrim(message)) BETWEEN 1 AND 2000),
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS hr_messages_employee_created_idx ON hr_messages(employee_id,created_at,id);
 CREATE TABLE IF NOT EXISTS audit_logs (
   id bigserial PRIMARY KEY, actor_id uuid REFERENCES users(id) ON DELETE SET NULL, action text NOT NULL,
   resource text NOT NULL, resource_id text, metadata jsonb NOT NULL DEFAULT '{}', ip inet, created_at timestamptz NOT NULL DEFAULT now()

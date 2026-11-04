@@ -1009,6 +1009,52 @@ app.patch("/api/leave-requests/:id", auth, (req, res, next) => { req.url = `/api
 app.get("/api/notifications", auth, asyncRoute(async (req, res) => { const r = await pool.query("SELECT * FROM notifications WHERE user_id=$1 ORDER BY created_at DESC LIMIT 100", [req.session.user.id]); res.json({ data: r.rows }); }));
 app.post("/api/notifications/:id/read", auth, asyncRoute(async (req, res) => { const r = await pool.query("UPDATE notifications SET read_at=now() WHERE id=$1 AND user_id=$2 RETURNING *", [req.params.id, req.session.user.id]); if (!r.rows[0]) throw fail(404, "Notification not found"); res.json(r.rows[0]); }));
 
+app.get("/api/chat/messages", auth, roles("hr", "staff"), asyncRoute(async (req, res) => {
+  const employeeId = req.session.user.employeeId;
+  if (req.session.user.role === "staff" && !employeeId) throw fail(403, "Staff account is not linked to an employee");
+  const params = req.session.user.role === "hr" ? [] : [employeeId];
+  const result = await pool.query(
+    `SELECT * FROM (
+       SELECT m.id,m.employee_id,m.sender_user_id,m.message,m.created_at,e.name AS employee_name,u.role AS sender_role,u.email AS sender_email
+       FROM hr_messages m JOIN employees e ON e.id=m.employee_id
+       LEFT JOIN users u ON u.id=m.sender_user_id
+       ${params.length ? "WHERE m.employee_id=$1" : ""}
+       ORDER BY m.created_at DESC LIMIT 500
+     ) recent_messages ORDER BY created_at ASC`,
+    params
+  );
+  res.json({ data: result.rows });
+}));
+app.post("/api/chat/messages", auth, roles("hr", "staff"), asyncRoute(async (req, res) => {
+  const message = clean(req.body.message, 2000);
+  if (!message) throw fail(400, "Enter a message of up to 2,000 characters");
+  let employeeId = req.session.user.employeeId;
+  if (req.session.user.role === "hr") employeeId = clean(req.body.employee_id, 64);
+  if (!uuidPattern.test(employeeId || "")) throw fail(400, "Choose a valid employee conversation");
+  const employee = await pool.query("SELECT id,name,status FROM employees WHERE id=$1", [employeeId]);
+  if (!employee.rows[0]) throw fail(404, "Employee not found");
+  if (req.session.user.role === "hr" && employee.rows[0].status === "Inactive") throw fail(409, "Cannot message an inactive employee");
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const result = await client.query(
+      "INSERT INTO hr_messages(employee_id,sender_user_id,message) VALUES($1,$2,$3) RETURNING id,employee_id,sender_user_id,message,created_at",
+      [employeeId, req.session.user.id, message]
+    );
+    if (req.session.user.role === "hr") await notifyEmployee(client, employeeId, "New HR message", "HR sent you a message. Open Chatbox to reply.");
+    else await notifyHr(client, "New staff message", `${employee.rows[0].name} sent HR a message. Open Chatbox to reply.`);
+    await client.query(
+      "INSERT INTO audit_logs(actor_id,action,resource,resource_id,metadata,ip) VALUES($1,'create','hr-message',$2,$3,$4)",
+      [req.session.user.id, result.rows[0].id, { employee_id: employeeId }, req.ip]
+    );
+    await client.query("COMMIT");
+    res.status(201).json({ ...result.rows[0], employee_name: employee.rows[0].name, sender_role: req.session.user.role, sender_email: req.session.user.email });
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw error;
+  } finally { client.release(); }
+}));
+
 app.get(["/app.js", "/security.js", "/styles.css"], (req, res, next) =>
   res.sendFile(path.join(appRoot, path.basename(req.path)), next));
 app.use("/assets", express.static(path.join(appRoot, "assets"), { dotfiles: "ignore", index: false }));

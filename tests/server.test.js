@@ -63,6 +63,9 @@ test("protects HR workflow and account-management endpoints", async () => {
       assert.equal(response.status, 401, `${resource} should require authentication`);
       assert.deepEqual(await response.json(), { error: "Authentication required" });
     }
+    const chat = await fetch(`${baseUrl}/api/chat/messages`);
+    assert.equal(chat.status, 401);
+    assert.deepEqual(await chat.json(), { error: "Authentication required"});
     const history = await fetch(`${baseUrl}/api/employees/11111111-1111-4111-8111-111111111111/employment-history`);
     assert.equal(history.status, 401);
     assert.deepEqual(await history.json(), { error: "Authentication required" });
