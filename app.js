@@ -23,7 +23,6 @@ const NAV_HR = [
   { id: "leave", label: "Leave Requests", icon: "leave", section: "Time & attendance" },
   { id: "attendance", label: "Attendance", icon: "attendance", section: "Time & attendance" },
   { id: "roster", label: "Roster & OT", icon: "jobs", section: "Time & attendance" },
-  { id: "chat", label: "Chatbox", icon: "me", section: "Time & attendance" },
   { id: "jobs", label: "Recruitment", icon: "jobs", section: "Talent & pay" },
   { id: "contracts", label: "Contracts", icon: "contracts", section: "Talent & pay" },
   { id: "loans", label: "Loan Approvals", icon: "loans", section: "Talent & pay" },
@@ -43,7 +42,6 @@ const NAV_STAFF = [
   { id: "leave", label: "My leave", icon: "leave", section: "Requests" },
   { id: "loans", label: "My loans", icon: "loans", section: "Requests" },
   { id: "attendance", label: "Attendance", icon: "attendance", section: "Requests" },
-  { id: "chat", label: "Chatbox", icon: "me", section: "Requests" },
   { id: "payslip", label: "Payslip", icon: "pay", section: "Career & pay" },
   { id: "jobs", label: "Internal jobs", icon: "jobs", section: "Career & pay" }
 ];
@@ -238,6 +236,7 @@ let viewMode = {
 };
 let session = null;
 let notificationsOpen = false;
+let chatOpen = false;
 
 const FILE_KINDS = ["Resume", "Achievement certificate", "Qualification", "ID / appointment letter", "Profile picture", "Other"];
 const FILE_MAX = 1200000;
@@ -459,6 +458,7 @@ async function loadCoreFromApi() {
   state.tasks = (tasks.data || []).map(fromApiTask);
   state.contracts = (contracts.data || []).map(fromApiContract);
   state.chatMessages = (chatMessages.data || []).map(fromApiChatMessage);
+  updateChatControl();
   state.roster = (roster.data || []).map(fromApiRoster);
   state.overtime = (overtime.data || []).map(fromApiOvertime);
   state.employmentHistory = (employmentHistory.data || []).map(fromApiEmploymentHistory);
@@ -477,6 +477,55 @@ function notificationsForSession() {
   return (state.notifications || []).filter((n) =>
     !n.read && (session.role === "hr" ? n.recipientRole === "hr" : n.employeeId === session.employeeId)
   );
+}
+function chatReadState() {
+  try { return JSON.parse(localStorage.getItem(`unre-chat-read:${session?.id || session?.employeeId || session?.email}`) || "{}"); }
+  catch (_) { return {}; }
+}
+function chatHasUnreadMessages() {
+  if (!session || !["hr", "staff"].includes(session.role)) return false;
+  const messages = state.chatMessages || [];
+  const readState = chatReadState();
+  const lastSeenByEmployee = new Map();
+  for (const [employeeId, lastSeenId] of Object.entries(readState)) {
+    lastSeenByEmployee.set(employeeId, messages.findIndex((message) => message.id === lastSeenId));
+  }
+  return messages.some((message, index) => {
+    if (message.senderRole === session.role) return false;
+    const lastSeenId = readState[message.employeeId];
+    const lastSeenIndex = lastSeenByEmployee.get(message.employeeId);
+    return !lastSeenId || lastSeenIndex < 0 || index > lastSeenIndex;
+  });
+}
+function updateChatControl() {
+  const button = document.getElementById("chat-open");
+  const dot = document.getElementById("chat-unread-dot");
+  if (!button || !dot) return;
+  const available = Boolean(session && ["hr", "staff"].includes(session.role));
+  const unread = available && chatHasUnreadMessages();
+  button.classList.toggle("hidden", !available);
+  dot.classList.toggle("hidden", !unread);
+  button.setAttribute("aria-label", unread ? "Open Chatbox, new message" : "Open Chatbox");
+}
+function markChatConversationRead(employeeId) {
+  if (!employeeId) return;
+  const latest = [...(state.chatMessages || [])].reverse().find((message) => message.employeeId === employeeId);
+  if (!latest) return;
+  const key = `unre-chat-read:${session?.id || session?.employeeId || session?.email}`;
+  const readState = chatReadState();
+  readState[employeeId] = latest.id;
+  try { localStorage.setItem(key, JSON.stringify(readState)); } catch (_) {}
+  updateChatControl();
+}
+async function refreshChatMessages() {
+  if (DEMO_MODE || !session || !["hr", "staff"].includes(session.role) || document.hidden) return;
+  try {
+    const response = await apiRequest("/chat/messages");
+    state.chatMessages = (response.data || []).map(fromApiChatMessage);
+    if (chatOpen) markChatConversationRead(isHr() ? viewMode.chatEmployeeId : session.employeeId);
+    updateChatControl();
+    if (chatOpen) renderChatModal(true);
+  } catch (_) {}
 }
 function addNotification(notification) {
   state.notifications = state.notifications || [];
@@ -1104,13 +1153,13 @@ function route() {
   document.querySelectorAll("#nav a").forEach((a) => a.classList.toggle("active", a.dataset.page === page));
   const hr = {
     dashboard: renderDashboard, analytics: renderAnalytics, employees: renderEmployees, departments: renderDepartments, tasks: renderTasks,
-    leave: renderLeaveHr, jobs: renderJobsHr, contracts: renderContracts, loans: renderLoansHr, attendance: renderAttendance, roster: renderRoster, chat: renderChat, payroll: renderPayrollHr,
+    leave: renderLeaveHr, jobs: renderJobsHr, contracts: renderContracts, loans: renderLoansHr, attendance: renderAttendance, roster: renderRoster, payroll: renderPayrollHr,
     reports: renderReports, "roles-audit": renderRolesAudit
   };
   const leaders = { reports: renderReports };
   const staff = {
     home: renderStaffHome, profile: renderProfile, tasks: renderTasks, leave: renderLeaveStaff, loans: renderLoansStaff,
-    attendance: renderAttendanceStaff, payslip: renderPayslip, jobs: renderJobsStaff, chat: renderChat
+    attendance: renderAttendanceStaff, payslip: renderPayslip, jobs: renderJobsStaff
   };
   document.getElementById("view").innerHTML = (isHr() ? hr : isLeader() ? leaders : staff)[page]();
   bindPage(page);
@@ -1154,6 +1203,10 @@ document.addEventListener("click", (event) => {
   if (notificationsOpen && notificationWrap && !notificationWrap.contains(event.target)) closeNotificationMenu();
 });
 document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && chatOpen) {
+    closeModal();
+    return;
+  }
   if (event.key === "Escape" && notificationsOpen) {
     closeNotificationMenu(true);
     return;
@@ -1174,6 +1227,7 @@ document.getElementById("file-notifications").addEventListener("click", () => {
     document.getElementById("notification-menu").focus();
   }
 });
+document.getElementById("chat-open").addEventListener("click", openChatModal);
 document.getElementById("notification-menu").addEventListener("click", async (event) => {
   if (event.target.closest("[data-notifications-close]")) {
     closeNotificationMenu(true);
@@ -2308,7 +2362,8 @@ function renderChat() {
   const conversation = messages.filter((message) => message.employeeId === employee?.id);
   const faqMessages = viewMode.faqMessages || [];
   return `
-    <div class="page-head"><div><span class="eyebrow">${hr ? "PEOPLE OPERATIONS" : "STAFF SELF-SERVICE"}</span><h2>Chatbox</h2><p>Message UNRE HR or get quick guidance on common portal questions.</p></div></div>
+    <div class="modal chat-modal" role="dialog" aria-modal="true" aria-labelledby="chat-dialog-title" tabindex="-1">
+    <div class="chat-modal-head"><div><span class="eyebrow">${hr ? "PEOPLE OPERATIONS" : "STAFF SELF-SERVICE"}</span><h2 id="chat-dialog-title">Chatbox</h2></div><button class="chat-modal-close" type="button" data-close aria-label="Close Chatbox">×</button></div>
     <div class="chat-mode" role="tablist" aria-label="Chatbox mode">
       <button type="button" role="tab" aria-selected="${viewMode.chatMode === "messages"}" class="${viewMode.chatMode === "messages" ? "on" : ""}" data-chat-mode="messages">Message HR</button>
       <button type="button" role="tab" aria-selected="${viewMode.chatMode === "assistant"}" class="${viewMode.chatMode === "assistant" ? "on" : ""}" data-chat-mode="assistant">FAQ assistant</button>
@@ -2338,7 +2393,25 @@ function renderChat() {
           <label class="sr-only" for="hr-chat-input">Write a message</label><textarea id="hr-chat-input" name="message" maxlength="2000" rows="2" placeholder="Write a message to ${hr ? esc(employee?.name || "staff") : "UNRE HR"}" required></textarea>
           <button type="submit" class="btn btn-primary"${!employee ? " disabled" : ""}>Send</button>
         </form>
-      </section>`}`;
+      </section>`}
+    </div>`;
+}
+
+function renderChatModal(preserveDraft = false) {
+  const back = document.getElementById("modal");
+  const draft = preserveDraft ? document.getElementById("hr-chat-input")?.value || "" : "";
+  back.innerHTML = renderChat();
+  back.classList.add("chat-modal-back");
+  back.classList.remove("hidden");
+  if (preserveDraft && document.getElementById("hr-chat-input")) document.getElementById("hr-chat-input").value = draft;
+  bindChatModal();
+}
+function openChatModal() {
+  closeNotificationMenu();
+  chatOpen = true;
+  renderChatModal();
+  markChatConversationRead(isHr() ? viewMode.chatEmployeeId : session.employeeId);
+  document.getElementById("hr-chat-input")?.focus();
 }
 
 function renderProfile() {
@@ -2945,15 +3018,25 @@ function updatePayrollPreview(form) {
     <small>${pay.net < 0 ? "Deductions exceed gross pay. Adjust the amounts to continue." : `${monthDateRange(period).days} calendar days · ${workingDaysInMonth(period)} working days`}</small>`;
 }
 
-function closeModal() { document.getElementById("modal").classList.add("hidden"); }
+function closeModal() {
+  const wasChatOpen = chatOpen;
+  chatOpen = false;
+  const back = document.getElementById("modal");
+  back.classList.add("hidden");
+  back.classList.remove("chat-modal-back");
+  if (wasChatOpen) document.getElementById("chat-open")?.focus();
+}
 
-function bindPage(page) {
-  document.querySelectorAll("[data-go]").forEach((b) => { b.onclick = () => { location.hash = "#/" + b.dataset.go; }; });
+function bindChatModal() {
   document.querySelectorAll("[data-chat-mode]").forEach((button) => {
-    button.onclick = () => { viewMode.chatMode = button.dataset.chatMode; route(); };
+    button.onclick = () => { viewMode.chatMode = button.dataset.chatMode; renderChatModal(true); };
   });
   const chatEmployee = document.getElementById("chat-employee");
-  if (chatEmployee) chatEmployee.onchange = () => { viewMode.chatEmployeeId = chatEmployee.value; route(); };
+  if (chatEmployee) chatEmployee.onchange = () => {
+    viewMode.chatEmployeeId = chatEmployee.value;
+    markChatConversationRead(chatEmployee.value);
+    renderChatModal();
+  };
   const chatForm = document.getElementById("hr-chat-form");
   if (chatForm) chatForm.onsubmit = async (event) => {
     event.preventDefault();
@@ -2974,7 +3057,9 @@ function bindPage(page) {
         : { type: "request-status", recipientRole: "hr", employeeName: employee?.name, title: "New staff message", message: `${employee?.name || "A staff member"} sent HR a message.`, targetPage: "chat" });
     }
     save();
-    route();
+    markChatConversationRead(employeeId);
+    renderChatModal();
+    document.getElementById("hr-chat-input")?.focus();
   };
   const faqForm = document.getElementById("faq-chat-form");
   if (faqForm) faqForm.onsubmit = (event) => {
@@ -2982,8 +3067,13 @@ function bindPage(page) {
     const question = faqForm.elements.question.value.trim();
     if (!question) return;
     viewMode.faqMessages = [...(viewMode.faqMessages || []), { role: "user", text: question }, { role: "assistant", text: hrFaqAnswer(question) }];
-    route();
+    renderChatModal();
+    document.getElementById("faq-chat-input")?.focus();
   };
+}
+
+function bindPage(page) {
+  document.querySelectorAll("[data-go]").forEach((b) => { b.onclick = () => { location.hash = "#/" + b.dataset.go; }; });
   const payslipPeriod = document.getElementById("payslip-period");
   if (payslipPeriod) payslipPeriod.onchange = () => {
     viewMode.payslipPeriod = payslipPeriod.value;
@@ -3705,6 +3795,7 @@ document.getElementById("modal").addEventListener("click", async (e) => {
   if (contract) { openContractModal(contract.dataset.contract); }
 });
 document.getElementById("modal").addEventListener("submit", async (e) => {
+  if (["hr-chat-form", "faq-chat-form"].includes(e.target.id)) return;
   e.preventDefault();
   const form = e.target;
   const data = Object.fromEntries(new FormData(form));
@@ -4286,6 +4377,7 @@ function showApp() {
   document.getElementById("acting-label").textContent = session.role === "hr" ? "HR office · signed in as" : isLeader() ? `${ACCESS_ROLE_LABELS[session.role]} · reports access` : "Staff self-service · signed in as";
   document.getElementById("actor-pill").textContent = session.label;
   updateNotificationControl();
+  updateChatControl();
   document.getElementById("side-title").textContent = session.role === "hr" ? "UNRE HR" : isLeader() ? "UNRE Leadership" : "UNRE Staff";
   document.getElementById("side-sub").textContent = session.role === "hr" ? "Natural Resources & Environment" : isLeader() ? "Workforce reports" : "Self-service portal";
   location.hash = session.role === "hr" ? "#/dashboard" : isLeader() ? "#/reports" : "#/home";
@@ -4299,6 +4391,11 @@ window.addEventListener("storage", (e) => {
     state = JSON.parse(e.newValue);
     if (session) {
       updateNotificationControl();
+      updateChatControl();
+      if (chatOpen) {
+        markChatConversationRead(isHr() ? viewMode.chatEmployeeId : session.employeeId);
+        renderChatModal(true);
+      }
       route();
     }
   } catch (_) {
@@ -4394,3 +4491,7 @@ async function initializeApp() {
   } catch (_) {}
 }
 initializeApp();
+window.setInterval(() => { if (session && !DEMO_MODE) refreshChatMessages(); }, 15000);
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden && session && !DEMO_MODE) refreshChatMessages();
+});
