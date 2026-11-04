@@ -932,6 +932,26 @@ body.mobile-nav-open .nav-toggle-icon i:last-child { transform: translateY(-6px)
   .stats, .dashboard-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .main { padding: 24px 20px 36px; }
 }
+
+@media print {
+  @page { margin: 14mm; }
+  body * { visibility: hidden !important; }
+  #payslip-print, #payslip-print * { visibility: visible !important; }
+  #payslip-print {
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: 100%;
+    padding: 0;
+    color: #18211c;
+    background: #fff;
+  }
+  #payslip-print .payslip-print-action { display: none !important; }
+  #payslip-print .card {
+    box-shadow: none;
+    break-inside: avoid;
+  }
+  #payslip-print .grid-2 { grid-template-columns: 1fr 1fr; }
+}
 @media (max-width: 560px) {
   .form-grid { grid-template-columns: 1fr; }
   .span-2 { grid-column: auto; }

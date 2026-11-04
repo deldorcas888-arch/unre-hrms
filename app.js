@@ -226,7 +226,7 @@ let viewMode = {
   employees: "All", employeeStatus: "All", employeeDept: "All", employeeView: "list", employeePage: 1,
   leave: "calendar", leaveQuery: "", leaveStatus: "All", leaveType: "All", leavePage: 1,
   leaveMonth: "", portal: "hr", attendanceMonth: todayIso().slice(0, 7),
-  attendanceQuery: "", attendanceDept: "All", attendanceDate: todayIso(), payrollPeriod: todayIso().slice(0, 7),
+  attendanceQuery: "", attendanceDept: "All", attendanceDate: todayIso(), payrollPeriod: todayIso().slice(0, 7), payslipPeriod: "",
   taskView: "board", taskQuery: "", taskStatus: "All", taskDept: "All", taskMonth: todayIso().slice(0, 7),
   payrollQuery: "", payrollRange: "Monthly", payrollSummaryYear: todayIso().slice(0, 4),
   payrollCompanyYear: todayIso().slice(0, 4), recruitQuery: "", recruitStatus: "All",
@@ -2139,23 +2139,27 @@ function renderPayrollHr() {
 
 function renderPayslip() {
   const person = me();
-  const ownPayroll = (state.payroll || []).filter((record) =>
-    record.employeeId === person.id && record.status === "Completed"
-  ).sort((a, b) => String(b.period).localeCompare(String(a.period)));
-  const currentPeriodEntry = (state.payroll || []).find((record) =>
-    record.employeeId === person.id && String(record.period || "").slice(0, 7) === viewMode.payrollPeriod
-  );
-  const savedPayroll = currentPeriodEntry || ownPayroll[0];
+  const ownPayroll = (state.payroll || []).filter((record) => record.employeeId === person.id)
+    .sort((a, b) => String(b.period).localeCompare(String(a.period)));
+  const periods = [...new Set([todayIso().slice(0, 7), ...ownPayroll.map((record) => String(record.period || "").slice(0, 7)).filter(Boolean)])]
+    .sort((a, b) => b.localeCompare(a));
+  if (!periods.includes(viewMode.payslipPeriod)) {
+    viewMode.payslipPeriod = ownPayroll[0] ? String(ownPayroll[0].period).slice(0, 7) : todayIso().slice(0, 7);
+  }
+  const payrollMonth = viewMode.payslipPeriod;
+  const savedPayroll = ownPayroll.find((record) => String(record.period || "").slice(0, 7) === payrollMonth);
   const p = savedPayroll ? {
     ...savedPayroll,
     baseGross: Number(savedPayroll.basicSalary ?? savedPayroll.gross),
     employerNasfund: Number(savedPayroll.basicSalary ?? savedPayroll.gross) * 0.084,
     loans: state.loans.filter((loan) => (loan.employeeId === person.id || loan.employee === person.name) &&
       loan.status === "Approved" && (loan.amount - (loan.repaid || 0)) > 0)
-  } : payslip(person);
-  const payrollMonth = savedPayroll ? String(savedPayroll.period).slice(0, 7) : viewMode.payrollPeriod;
+  } : payslip(person, payrollMonth);
   return `
-    <div class="page-head"><div><h2>Payslip</h2><p>${new Intl.DateTimeFormat("en", { month: "long", year: "numeric" }).format(new Date(`${payrollMonth}-01T00:00:00`))} · ${esc(person.name)}</p></div></div>
+    <div id="payslip-print" class="payslip-print">
+    <div class="page-head"><div><h2>Payslip</h2><p>${new Intl.DateTimeFormat("en", { month: "long", year: "numeric" }).format(new Date(`${payrollMonth}-01T00:00:00`))} · ${esc(person.name)}</p></div>
+      <div class="payslip-controls"><label><span class="sr-only">Payslip period</span><select id="payslip-period">${periods.map((period) => `<option value="${period}"${period === payrollMonth ? " selected" : ""}>${new Intl.DateTimeFormat("en", { month: "long", year: "numeric" }).format(new Date(`${period}-01T00:00:00`))}</option>`).join("")}</select></label>
+        ${savedPayroll?.status === "Completed" ? `<button type="button" class="btn btn-primary payslip-print-action" data-payslip-download>Download payslip</button>` : ""}</div></div>
     ${savedPayroll?.status === "Completed" ? `<div class="card payslip-status"><strong>Finalised payroll</strong>${badge(savedPayroll.status)}</div>` :
       savedPayroll?.status === "Pending" ? `<div class="card payslip-status"><strong>Payroll awaiting HR review</strong>${badge(savedPayroll.status)}</div>` :
         savedPayroll?.status === "Rejected" ? `<div class="card payslip-status"><strong>Payroll entry was rejected</strong>${badge(savedPayroll.status)}</div>` :
@@ -2178,6 +2182,7 @@ function renderPayslip() {
         <p class="meta">UNRE also remits NASFUND employer 8.4% (${kina2(p.employerNasfund)}) on your behalf. This is not taken from your net pay.</p>
         ${p.loans.length ? p.loans.map((l) => `<div class="leave-mini"><div><strong>${esc(l.kind)}</strong><div class="meta">${kina2(loanMonthly(l))} this month</div></div>${badge("Approved")}</div>`).join("") : `<p class="meta">No active loan deduction.</p>`}
       </div>
+    </div>
     </div>`;
 }
 
@@ -2783,15 +2788,15 @@ function openModal(kind, attendanceEmployeeId, attendanceDate, contractId) {
       <div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button class="btn btn-primary">Submit to HR</button></div></form>`,
     roster: `<h3>Add roster shift</h3><form id="f-roster">
       <div class="field"><label>Employee</label><select name="employeeId" id="roster-employee">${empOpts}</select></div>
-      <p class="meta" id="roster-period-help">Teaching staff use a semester roster (6 months). Other employees use a two-week roster (14 days).</p>
+      <p class="meta" id="roster-period-help">Teaching staff must use a six-month semester roster. Other employees must use a two-week roster.</p>
       <div class="form-grid"><div><label>Starting date</label><input type="date" name="startDate" value="${rosterStart}" required /></div><div><label>Finishing date</label><input type="date" name="endDate" value="${rosterEnd}" required /></div></div>
       <div class="form-grid"><div><label>Break (minutes)</label><input type="number" name="breakMinutes" min="0" value="30" required /></div><div><label>Roster period</label><input id="roster-period" value="${isTeachingRosterEmployee(rosterEmployee) ? "6 months (semester)" : "14 days (two weeks)"}" readonly /></div></div>
       <div class="form-grid"><div><label>Start</label><input type="time" name="start" value="08:00" required /></div><div><label>End</label><input type="time" name="end" value="16:30" required /></div></div>
       <div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button class="btn btn-primary">Save shift</button></div></form>`,
     overtime: `<h3>Record overtime</h3><form id="f-overtime">
       <div class="field"><label>Employee</label><select name="employeeId">${empOpts}</select></div>
-      <div class="form-grid"><div><label>Date</label><input type="date" name="date" value="${todayIso()}" required /></div><div><label>Hours</label><input type="number" name="hours" min="0.25" step="0.25" required /></div></div>
-      <div class="form-grid"><div><label>Multiplier</label><select name="multiplier"><option value="1.5">1.5× Standard OT</option><option value="2">2× Public holiday</option></select></div><div><label>Reason</label><input name="reason" required placeholder="Exam marking" /></div></div>
+      <div class="form-grid"><div><label>Date</label><input type="date" name="date" value="${todayIso()}" required /></div><div><label>Hours</label><input type="number" name="hours" min="0.25" max="24" step="0.25" required /></div></div>
+      <div class="form-grid"><div><label>Multiplier</label><select name="multiplier"><option value="1.5">1.5× Standard OT</option><option value="2">2× Public holiday</option></select></div><div><label>Reason</label><input name="reason" maxlength="500" required placeholder="Exam marking" /></div></div>
       <div class="modal-actions"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button class="btn btn-primary">Save overtime</button></div></form>`,
     payroll: `<h3>Add payroll</h3><form id="f-payroll">
       <div class="field"><label for="payroll-employee">Employee name</label><select name="employeeId" id="payroll-employee" required>${empOpts}</select></div>
@@ -2863,6 +2868,14 @@ function closeModal() { document.getElementById("modal").classList.add("hidden")
 
 function bindPage(page) {
   document.querySelectorAll("[data-go]").forEach((b) => { b.onclick = () => { location.hash = "#/" + b.dataset.go; }; });
+  const payslipPeriod = document.getElementById("payslip-period");
+  if (payslipPeriod) payslipPeriod.onchange = () => {
+    viewMode.payslipPeriod = payslipPeriod.value;
+    route();
+  };
+  document.querySelectorAll("[data-payslip-download]").forEach((button) => {
+    button.onclick = () => window.print();
+  });
   const analyticsYear = document.getElementById("analytics-year");
   if (analyticsYear) analyticsYear.onchange = () => {
     viewMode.analyticsYear = analyticsYear.value;
@@ -4108,7 +4121,7 @@ document.getElementById("modal").addEventListener("change", async (e) => {
       if (period) period.value = teaching ? "6 months (semester)" : "14 days (two weeks)";
       if (help) help.textContent = teaching
         ? "Lecturers and tutors are rostered for the semester. The default period is 6 months."
-        : "This employee uses a two-week roster. HR can set a different finishing date when needed.";
+        : "This employee must use a two-week roster ending 14 calendar days after the start date.";
     }
     return;
   }
